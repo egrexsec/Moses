@@ -33,15 +33,7 @@ def apply_preset(preset_name):
     return preset["model"], preset["mode"]
 
 
-def split_song(audio_file, model, mode):
-    if audio_file is None:
-        return "Please upload a song.", [], ""
-
-    if not ffmpeg_installed:
-        return "FFmpeg is not installed.", [], "Install FFmpeg and restart Moses."
-
-    info = get_audio_info(audio_file)
-
+def build_demucs_command(model, mode):
     cmd = [
         "python",
         "-m",
@@ -55,6 +47,24 @@ def split_song(audio_file, model, mode):
     if mode == "Vocals + Instrumental":
         cmd += ["--two-stems", "vocals"]
 
+    return cmd
+
+
+def collect_output_files(model, song_name):
+    result_folder = Path(OUTPUT_DIR) / model / song_name
+    return list(result_folder.glob("*.wav"))
+
+
+def split_song(audio_file, model, mode):
+    if audio_file is None:
+        return "Please upload a song.", [], ""
+
+    if not ffmpeg_installed:
+        return "FFmpeg is not installed.", [], "Install FFmpeg and restart Moses."
+
+    info = get_audio_info(audio_file)
+
+    cmd = build_demucs_command(model, mode)
     cmd.append(audio_file)
 
     try:
@@ -63,9 +73,7 @@ def split_song(audio_file, model, mode):
         return f"Error: {e}", [], ""
 
     song_name = Path(audio_file).stem
-    result_folder = Path(OUTPUT_DIR) / model / song_name
-
-    files = list(result_folder.glob("*.wav"))
+    files = collect_output_files(model, song_name)
 
     metadata = ""
 
@@ -76,6 +84,43 @@ def split_song(audio_file, model, mode):
         )
 
     return "Stem separation complete.", [str(f) for f in files], metadata
+
+
+def batch_split(audio_files, model, mode):
+    if not audio_files:
+        return "Please upload songs.", [], ""
+
+    if not ffmpeg_installed:
+        return "FFmpeg is not installed.", [], "Install FFmpeg and restart Moses."
+
+    all_outputs = []
+    processed = []
+
+    for audio_file in audio_files:
+        cmd = build_demucs_command(model, mode)
+        cmd.append(audio_file)
+
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError:
+            continue
+
+        song_name = Path(audio_file).stem
+        files = collect_output_files(model, song_name)
+
+        all_outputs.extend([str(f) for f in files])
+        processed.append(song_name)
+
+    summary = (
+        f"Processed {len(processed)} songs\n"
+        f"Device: {device_info['device']}"
+    )
+
+    return (
+        f"Batch stem separation complete for {len(processed)} songs.",
+        all_outputs,
+        summary
+    )
 
 
 with gr.Blocks(title="Moses") as app:
@@ -99,8 +144,6 @@ with gr.Blocks(title="Moses") as app:
         label="Workflow Preset"
     )
 
-    audio = gr.Audio(type="filepath", label="Upload Song")
-
     model = gr.Dropdown(
         choices=["htdemucs", "htdemucs_ft", "htdemucs_6s"],
         value="htdemucs",
@@ -119,16 +162,34 @@ with gr.Blocks(title="Moses") as app:
         outputs=[model, mode]
     )
 
-    run_button = gr.Button("Split Song")
+    with gr.Tab("Single Song"):
+        audio = gr.Audio(type="filepath", label="Upload Song")
 
-    status = gr.Textbox(label="Status")
-    outputs = gr.File(label="Separated Stems", file_count="multiple")
-    metadata = gr.Textbox(label="Song Information")
+        run_button = gr.Button("Split Song")
 
-    run_button.click(
-        split_song,
-        inputs=[audio, model, mode],
-        outputs=[status, outputs, metadata]
-    )
+        status = gr.Textbox(label="Status")
+        outputs = gr.File(label="Separated Stems", file_count="multiple")
+        metadata = gr.Textbox(label="Song Information")
+
+        run_button.click(
+            split_song,
+            inputs=[audio, model, mode],
+            outputs=[status, outputs, metadata]
+        )
+
+    with gr.Tab("Batch Processing"):
+        batch_audio = gr.Files(label="Upload Multiple Songs")
+
+        batch_button = gr.Button("Batch Split")
+
+        batch_status = gr.Textbox(label="Batch Status")
+        batch_outputs = gr.File(label="Batch Outputs", file_count="multiple")
+        batch_metadata = gr.Textbox(label="Batch Summary")
+
+        batch_button.click(
+            batch_split,
+            inputs=[batch_audio, model, mode],
+            outputs=[batch_status, batch_outputs, batch_metadata]
+        )
 
 app.launch()
