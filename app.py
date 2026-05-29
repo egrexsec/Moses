@@ -14,73 +14,78 @@ config = load_config()
 device_info = detect_device()
 ffmpeg_installed = check_ffmpeg()
 
+GPU_STATUS = "CUDA ACTIVE" if device_info.get("cuda") else "CPU MODE"
+GPU_NAME = device_info.get("name", "Unknown Device")
+
 MODEL_OPTIONS = {
-    "Fast Processing (Lower Quality)": "htdemucs",
-    "Studio Quality (Recommended)": "htdemucs_ft",
-    "Musician Detail Separation": "htdemucs_6s",
+    "Fast Processing": "htdemucs",
+    "Studio Quality": "htdemucs_ft",
+    "Musician Detail": "htdemucs_6s",
 }
 
 MODEL_DESCRIPTIONS = {
-    "Fast Processing (Lower Quality)": (
-        "Best for quick rehearsals and slower computers. "
-        "Faster processing with lower separation quality."
+    "Fast Processing": (
+        "Fastest separation with lower quality."
     ),
-    "Studio Quality (Recommended)": (
-        "Best overall quality for Gospel, worship, choir, and live music. "
-        "Recommended for Ableton exports and rehearsals."
+    "Studio Quality": (
+        "Best quality for Gospel, worship, and rehearsal tracks."
     ),
-    "Musician Detail Separation": (
-        "Separates additional musical elements like guitar and piano more aggressively. "
-        "Useful for learning parts, but may create more audio artifacts."
+    "Musician Detail": (
+        "Extra instrument detail for learning parts."
     ),
 }
 
 X32_THEME_CSS = """
 body {
-    background: #0b0f14 !important;
+    background: #090d12 !important;
 }
 
 .gradio-container {
-    background: linear-gradient(to bottom, #11161d, #0b0f14) !important;
-    color: #d7dde5 !important;
+    max-width: 1600px !important;
+    margin: auto !important;
+    background: linear-gradient(to bottom, #10161d, #090d12) !important;
+    color: #d8e0ea !important;
     font-family: 'Segoe UI', sans-serif;
+    padding-top: 10px !important;
 }
 
 h1, h2, h3, p, label {
-    color: #d7dde5 !important;
+    color: #d8e0ea !important;
 }
 
 .block {
-    background: #161c24 !important;
-    border: 1px solid #2a323d !important;
-    border-radius: 10px !important;
-    box-shadow: 0 0 12px rgba(0,0,0,0.35) !important;
+    background: #141b23 !important;
+    border: 1px solid #273240 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(0,0,0,0.25) !important;
+    padding: 8px !important;
 }
 
 button.primary {
-    background: linear-gradient(to bottom, #00b3ff, #0077b6) !important;
+    background: linear-gradient(to bottom, #18bfff, #0086d1) !important;
     border: none !important;
     color: white !important;
-    font-weight: bold !important;
-    border-radius: 8px !important;
+    font-weight: 700 !important;
+    border-radius: 6px !important;
+    height: 42px !important;
 }
 
 button.primary:hover {
-    background: linear-gradient(to bottom, #27c1ff, #0096e6) !important;
+    background: linear-gradient(to bottom, #34cbff, #00a2ff) !important;
 }
 
 textarea,
 input,
 select {
-    background: #0f141a !important;
-    color: #d7dde5 !important;
-    border: 1px solid #2d3742 !important;
+    background: #0e141a !important;
+    color: #d8e0ea !important;
+    border: 1px solid #2b3947 !important;
 }
 
 .tab-nav button {
-    background: #151b22 !important;
-    color: #d7dde5 !important;
-    border: 1px solid #2a323d !important;
+    background: #121922 !important;
+    color: #d8e0ea !important;
+    border: 1px solid #273240 !important;
 }
 
 .tab-nav button.selected {
@@ -88,9 +93,22 @@ select {
     color: white !important;
 }
 
-.progress-text {
-    color: #00d084 !important;
-    font-weight: bold !important;
+.audio-card {
+    background: #111821;
+    border: 1px solid #273240;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.status-strip {
+    background: linear-gradient(to right, #0d141c, #121d28);
+    border: 1px solid #273240;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #65d7ff;
 }
 """
 
@@ -108,7 +126,6 @@ def empty_job_outputs(message="No active job."):
         None,
         None,
         gr.update(value=0),
-        gr.update(value="Idle")
     )
 
 
@@ -120,14 +137,12 @@ def normalize_outputs(outputs):
         return outputs
 
     if isinstance(outputs, list):
-        normalized = {
+        return {
             "vocals": outputs[0] if len(outputs) > 0 else None,
             "drums": outputs[1] if len(outputs) > 1 else None,
             "bass": outputs[2] if len(outputs) > 2 else None,
             "other": outputs[3] if len(outputs) > 3 else None,
         }
-
-        return normalized
 
     return {}
 
@@ -156,23 +171,7 @@ def submit_job(audio_file, model_key, export_preset):
     if audio_file is None:
         return (
             "No file uploaded.",
-            "",
             None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            gr.update(value=0),
-            gr.update(value="Idle")
-        )
-
-    if not ffmpeg_installed:
-        return (
-            "FFmpeg is not installed.",
-            "",
             None,
             None,
             None,
@@ -182,14 +181,13 @@ def submit_job(audio_file, model_key, export_preset):
             None,
             None,
             gr.update(value=0),
-            gr.update(value="Error")
         )
 
     job = queue_single_job(audio_file, model_key, export_preset)
 
     return (
-        f"Job submitted: {job.song_name}",
-        job.job_id,
+        f"Queued: {job.song_name}",
+        None,
         None,
         None,
         None,
@@ -199,7 +197,6 @@ def submit_job(audio_file, model_key, export_preset):
         None,
         None,
         gr.update(value=0),
-        gr.update(value="Queued")
     )
 
 
@@ -212,12 +209,6 @@ def poll_job(job_id):
     if not job:
         return empty_job_outputs("Job not found.")
 
-    status_text = (
-        f"Status: {job.status} | "
-        f"Progress: {job.progress}% | "
-        f"Message: {job.message}"
-    )
-
     outputs = normalize_outputs(job.outputs)
 
     vocals_file = outputs.get("vocals")
@@ -226,7 +217,7 @@ def poll_job(job_id):
     other_file = outputs.get("other")
 
     return (
-        status_text,
+        f"{job.status.upper()} • {job.progress}% • {job.message}",
         vocals_file,
         drums_file,
         bass_file,
@@ -237,7 +228,6 @@ def poll_job(job_id):
         other_file,
         job.zip_file,
         gr.update(value=job.progress),
-        gr.update(value=job.status.title())
     )
 
 
@@ -246,131 +236,148 @@ def update_model_description(model_key):
 
 
 with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
-    gr.Markdown("# Moses")
-    gr.Markdown("### Gospel Stem Separation Console")
 
-    with gr.Tab("Split Song"):
-        with gr.Row():
-            with gr.Column(scale=2):
-                gr.Markdown("## Input Routing")
+    gr.HTML(
+        f"""
+        <div class='status-strip'>
+        MOSES • {GPU_STATUS} • {GPU_NAME}
+        </div>
+        """
+    )
 
-                audio_input = gr.Audio(
-                    label="Stereo Input Track",
-                    type="filepath"
-                )
+    with gr.Tabs():
 
-                model_choice = gr.Dropdown(
-                    choices=list(MODEL_OPTIONS.keys()),
-                    value="Studio Quality (Recommended)",
-                    label="Separation Engine"
-                )
+        with gr.Tab("Split Song"):
 
-                model_description = gr.Markdown(
-                    MODEL_DESCRIPTIONS["Studio Quality (Recommended)"]
-                )
+            with gr.Row():
+                with gr.Column(scale=3):
 
-                model_choice.change(
-                    update_model_description,
-                    inputs=[model_choice],
-                    outputs=[model_description]
-                )
+                    audio_input = gr.Audio(
+                        label="INPUT TRACK",
+                        type="filepath",
+                        height=180
+                    )
 
-                export_preset = gr.Dropdown(
-                    choices=list(EXPORT_PRESETS.keys()),
-                    value=list(EXPORT_PRESETS.keys())[0],
-                    label="Output Routing Preset"
-                )
+                    with gr.Row():
+                        model_choice = gr.Dropdown(
+                            choices=list(MODEL_OPTIONS.keys()),
+                            value="Studio Quality",
+                            label="ENGINE"
+                        )
 
-                split_button = gr.Button(
-                    "Process Stem Split",
-                    variant="primary"
-                )
+                        export_preset = gr.Dropdown(
+                            choices=list(EXPORT_PRESETS.keys()),
+                            value=list(EXPORT_PRESETS.keys())[0],
+                            label="PRESET"
+                        )
 
-                job_id_output = gr.Textbox(
-                    label="Processing Job ID",
-                    interactive=False
-                )
+                    model_description = gr.Markdown(
+                        MODEL_DESCRIPTIONS["Studio Quality"]
+                    )
 
-            with gr.Column(scale=2):
-                gr.Markdown("## Stem Output Matrix")
+                    model_choice.change(
+                        update_model_description,
+                        inputs=[model_choice],
+                        outputs=[model_description]
+                    )
 
-                status_output = gr.Textbox(
-                    label="Engine Status"
-                )
+                    split_button = gr.Button(
+                        "PROCESS STEM SPLIT",
+                        variant="primary"
+                    )
 
-                progress_output = gr.Slider(
-                    label="Processing Meter",
-                    minimum=0,
-                    maximum=100,
-                    value=0,
-                    interactive=False
-                )
+                    engine_status = gr.Textbox(
+                        label="ENGINE STATUS",
+                        value="IDLE"
+                    )
 
-                vocals_output = gr.File(label="Vocals Bus Export")
-                vocals_preview = gr.Audio(label="Vocals Bus Preview")
+                    processing_meter = gr.Slider(
+                        label="PROCESSING METER",
+                        minimum=0,
+                        maximum=100,
+                        value=0,
+                        interactive=False
+                    )
 
-                drums_output = gr.File(label="Drums Bus Export")
-                drums_preview = gr.Audio(label="Drums Bus Preview")
+                with gr.Column(scale=4):
 
-                bass_output = gr.File(label="Bass Bus Export")
-                bass_preview = gr.Audio(label="Bass Bus Preview")
+                    with gr.Row():
+                        with gr.Column(elem_classes=["audio-card"]):
+                            gr.Markdown("### VOCALS")
+                            vocals_preview = gr.Audio(show_download_button=False)
+                            vocals_output = gr.File(label="Download")
 
-                other_output = gr.File(label="Music Bus Export")
-                other_preview = gr.Audio(label="Music Bus Preview")
+                        with gr.Column(elem_classes=["audio-card"]):
+                            gr.Markdown("### DRUMS")
+                            drums_preview = gr.Audio(show_download_button=False)
+                            drums_output = gr.File(label="Download")
 
-                zip_output = gr.File(label="Ableton Session Export")
+                    with gr.Row():
+                        with gr.Column(elem_classes=["audio-card"]):
+                            gr.Markdown("### BASS")
+                            bass_preview = gr.Audio(show_download_button=False)
+                            bass_output = gr.File(label="Download")
 
-        split_button.click(
-            submit_job,
-            inputs=[
-                audio_input,
-                model_choice,
-                export_preset,
-            ],
-            outputs=[
-                status_output,
-                job_id_output,
-                vocals_output,
-                drums_output,
-                bass_output,
-                other_output,
-                vocals_preview,
-                drums_preview,
-                bass_preview,
-                other_preview,
-                zip_output,
-                progress_output,
-                status_output,
-            ]
-        )
+                        with gr.Column(elem_classes=["audio-card"]):
+                            gr.Markdown("### MUSIC")
+                            other_preview = gr.Audio(show_download_button=False)
+                            other_output = gr.File(label="Download")
 
-        polling_timer = gr.Timer(2)
+                    zip_output = gr.File(label="ABLETON EXPORT PACKAGE")
 
-        polling_timer.tick(
-            poll_job,
-            inputs=[job_id_output],
-            outputs=[
-                status_output,
-                vocals_output,
-                drums_output,
-                bass_output,
-                other_output,
-                vocals_preview,
-                drums_preview,
-                bass_preview,
-                other_preview,
-                zip_output,
-                progress_output,
-                status_output,
-            ]
-        )
+            hidden_job_id = gr.Textbox(visible=False)
 
-    with gr.Tab("Diagnostics"):
-        diagnostics_box = gr.Textbox(
-            value=diagnostics_text(),
-            lines=20,
-            label="System Diagnostics"
-        )
+            split_button.click(
+                submit_job,
+                inputs=[
+                    audio_input,
+                    model_choice,
+                    export_preset,
+                ],
+                outputs=[
+                    engine_status,
+                    vocals_output,
+                    drums_output,
+                    bass_output,
+                    other_output,
+                    vocals_preview,
+                    drums_preview,
+                    bass_preview,
+                    other_preview,
+                    zip_output,
+                    processing_meter,
+                ]
+            ).then(
+                lambda: "active-job",
+                outputs=[hidden_job_id]
+            )
+
+            polling_timer = gr.Timer(2)
+
+            polling_timer.tick(
+                poll_job,
+                inputs=[hidden_job_id],
+                outputs=[
+                    engine_status,
+                    vocals_output,
+                    drums_output,
+                    bass_output,
+                    other_output,
+                    vocals_preview,
+                    drums_preview,
+                    bass_preview,
+                    other_preview,
+                    zip_output,
+                    processing_meter,
+                ]
+            )
+
+        with gr.Tab("Diagnostics"):
+            diagnostics_box = gr.Textbox(
+                value=diagnostics_text(),
+                lines=18,
+                label="SYSTEM DIAGNOSTICS"
+            )
 
 
 if __name__ == "__main__":
