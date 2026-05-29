@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from utils.config import DEFAULT_CONFIG, CONFIG_PATH, load_config, save_config
-from utils.database import init_db
+from utils.database import init_db, get_db_status
 from utils.model_manager import ensure_required_models
 
 REQUIRED_DIRECTORIES = [
@@ -148,18 +148,20 @@ def ensure_database():
     try:
         init_db()
 
+        status = get_db_status()
+
         return {
             "name": "SQLite Database",
-            "ok": True,
-            "details": "moses.db initialized",
-            "fix": "Ensure write permission in the Moses project directory."
+            "ok": status["ok"],
+            "details": f"SQLite initialized at: {status['path']}",
+            "fix": "Ensure write permission in the configured database directory."
         }
     except Exception as exc:
         return {
             "name": "SQLite Database",
             "ok": False,
             "details": str(exc),
-            "fix": "Check filesystem permissions and database lock state."
+            "fix": "Check filesystem permissions and database path configuration."
         }
 
 
