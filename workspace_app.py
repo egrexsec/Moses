@@ -91,4 +91,9 @@ with gr.Blocks(title="Moses Workspace") as app:
             outputs=[project_details]
         )
 
-app.launch()
+
+app.launch(
+    server_name="0.0.0.0",
+    server_port=7860,
+    show_error=True,
+)
