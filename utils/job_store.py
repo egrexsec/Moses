@@ -5,6 +5,7 @@ import time
 import uuid
 
 from utils.database import upsert_job
+from utils.priorities import DEFAULT_PRIORITY, normalize_priority
 
 
 @dataclass
@@ -13,6 +14,7 @@ class StoredJob:
     model: str
     mode: str
     export_preset: str
+    priority: str = DEFAULT_PRIORITY
     job_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     song_name: str = ""
     status: str = "queued"
@@ -32,6 +34,7 @@ class StoredJob:
 
     def __post_init__(self):
         self.song_name = Path(self.audio_file).stem
+        self.priority = normalize_priority(self.priority)
 
 
 class JobStore:
@@ -39,12 +42,13 @@ class JobStore:
         self.jobs = {}
         self.lock = threading.Lock()
 
-    def create_job(self, audio_file, model, mode, export_preset):
+    def create_job(self, audio_file, model, mode, export_preset, priority=DEFAULT_PRIORITY):
         job = StoredJob(
             audio_file=audio_file,
             model=model,
             mode=mode,
-            export_preset=export_preset
+            export_preset=export_preset,
+            priority=priority,
         )
 
         with self.lock:
@@ -68,6 +72,9 @@ class JobStore:
             for key, value in kwargs.items():
                 setattr(job, key, value)
 
+            if hasattr(job, "priority"):
+                job.priority = normalize_priority(job.priority)
+
             job.updated_at = time.time()
 
         upsert_job(job)
@@ -84,6 +91,8 @@ class JobStore:
             "running": len([job for job in jobs if job.status == "running"]),
             "complete": len([job for job in jobs if job.status == "complete"]),
             "failed": len([job for job in jobs if job.status == "failed"]),
+            "urgent": len([job for job in jobs if job.priority == "urgent"]),
+            "high": len([job for job in jobs if job.priority == "high"]),
         }
 
 
