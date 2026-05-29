@@ -12,6 +12,9 @@ from utils.config import load_config
 from utils.progress import tracker
 from utils.stems import categorize_stems
 from utils.preview import get_preview_stems
+from utils.queue import job_queue
+from utils.visualization import generate_waveform_image
+from utils.presets import EXPORT_PRESETS, filter_stems_by_preset
 
 OUTPUT_DIR = "separated"
 
@@ -111,29 +114,32 @@ def create_practice_track(song_name, organized_files):
 
 
 def process_song(audio_file, model, mode):
-    song_name = Path(audio_file).stem
+    job = job_queue.add_job(audio_file, model, mode)
 
     cmd = build_demucs_command(model, mode)
     cmd.append(audio_file)
 
     subprocess.run(cmd, check=True)
 
-    files = collect_output_files(model, song_name)
+    files = collect_output_files(model, job.song_name)
 
-    organized_files = organize_song_outputs(song_name, files)
+    organized_files = organize_song_outputs(job.song_name, files)
 
-    return song_name, organized_files
+    job_queue.mark_done(job)
+
+    return job.song_name, organized_files
 
 
-def split_song(audio_file, model, mode):
+def split_song(audio_file, model, mode, export_preset):
     if audio_file is None:
-        return "Please upload a song.", [], "", None, None, None
+        return "Please upload a song.", [], "", None, None, None, None
 
     if not ffmpeg_installed:
         return (
             "FFmpeg is not installed.",
             [],
             "Install FFmpeg and restart Moses.",
+            None,
             None,
             None,
             None
@@ -149,11 +155,21 @@ def split_song(audio_file, model, mode):
             mode
         )
     except subprocess.CalledProcessError as e:
-        return f"Error: {e}", [], "", None, None, None
+        return f"Error: {e}", [], "", None, None, None, None
 
     tracker.update(1, f"Completed {song_name}")
 
     metadata = build_metadata(audio_file)
+
+    categorized = categorize_stems(organized_files)
+
+    filtered_outputs = filter_stems_by_preset(
+        categorized,
+        export_preset
+    )
+
+    if not filtered_outputs:
+        filtered_outputs = organized_files
 
     practice_track = create_practice_track(
         song_name,
@@ -161,76 +177,36 @@ def split_song(audio_file, model, mode):
     )
 
     zip_file = create_zip_archive(
-        organized_files,
+        filtered_outputs,
         f"{song_name}_stems.zip"
     )
 
     previews = get_preview_stems(organized_files)
 
+    waveform_image = None
+
+    if previews.get("vocals"):
+        waveform_image = generate_waveform_image(
+            previews.get("vocals")
+        )
+
+    queue_summary = job_queue.summary()
+
+    queue_text = (
+        f"Queued: {queue_summary['queued']} | "
+        f"Complete: {queue_summary['complete']} | "
+        f"Failed: {queue_summary['failed']}"
+    )
+
     return (
         tracker.status(),
-        organized_files,
+        filtered_outputs,
         metadata,
         zip_file,
         practice_track,
-        previews.get("vocals")
-    )
-
-
-def batch_split(audio_files, model, mode):
-    if not audio_files:
-        return "Please upload songs.", [], "", None
-
-    if not ffmpeg_installed:
-        return (
-            "FFmpeg is not installed.",
-            [],
-            "Install FFmpeg and restart Moses.",
-            None
-        )
-
-    all_outputs = []
-    processed = []
-
-    tracker.start(len(audio_files))
-
-    for index, audio_file in enumerate(audio_files, start=1):
-        tracker.update(index - 1, f"Processing {Path(audio_file).stem}")
-
-        try:
-            song_name, organized_files = process_song(
-                audio_file,
-                model,
-                mode
-            )
-        except subprocess.CalledProcessError:
-            continue
-
-        all_outputs.extend(organized_files)
-        processed.append(song_name)
-
-        tracker.update(index, f"Completed {song_name}")
-
-    categorized = categorize_stems(all_outputs)
-
-    summary = (
-        f"Processed {len(processed)} songs\n"
-        f"Device: {device_info['device']}\n"
-        f"Vocals: {len(categorized.get('vocals', []))}\n"
-        f"Bass: {len(categorized.get('bass', []))}\n"
-        f"Drums: {len(categorized.get('drums', []))}"
-    )
-
-    zip_file = create_zip_archive(
-        all_outputs,
-        "moses_batch_stems.zip"
-    )
-
-    return (
-        tracker.status(),
-        all_outputs,
-        summary,
-        zip_file
+        previews.get("vocals"),
+        waveform_image,
+        queue_text
     )
 
 
@@ -253,6 +229,12 @@ with gr.Blocks(title="Moses") as app:
         choices=list(PRESETS.keys()),
         value="Standard",
         label="Workflow Preset"
+    )
+
+    export_preset = gr.Dropdown(
+        choices=list(EXPORT_PRESETS.keys()),
+        value="MD Pack",
+        label="Export Preset"
     )
 
     model = gr.Dropdown(
@@ -284,38 +266,21 @@ with gr.Blocks(title="Moses") as app:
         zip_download = gr.File(label="Download ZIP")
         practice_track = gr.File(label="Slow Practice Track")
         vocal_preview = gr.Audio(label="Vocal Preview")
+        waveform_preview = gr.Image(label="Waveform Preview")
+        queue_status = gr.Textbox(label="Queue Status")
 
         run_button.click(
             split_song,
-            inputs=[audio, model, mode],
+            inputs=[audio, model, mode, export_preset],
             outputs=[
                 status,
                 outputs,
                 metadata,
                 zip_download,
                 practice_track,
-                vocal_preview
-            ]
-        )
-
-    with gr.Tab("Batch Processing"):
-        batch_audio = gr.Files(label="Upload Multiple Songs")
-
-        batch_button = gr.Button("Batch Split")
-
-        batch_status = gr.Textbox(label="Batch Progress")
-        batch_outputs = gr.File(label="Batch Outputs", file_count="multiple")
-        batch_metadata = gr.Textbox(label="Batch Summary")
-        batch_zip = gr.File(label="Download Batch ZIP")
-
-        batch_button.click(
-            batch_split,
-            inputs=[batch_audio, model, mode],
-            outputs=[
-                batch_status,
-                batch_outputs,
-                batch_metadata,
-                batch_zip
+                vocal_preview,
+                waveform_preview,
+                queue_status
             ]
         )
 
