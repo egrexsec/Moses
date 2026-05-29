@@ -47,16 +47,10 @@ cd moses
 
 ### 3. Start Moses
 
-CPU mode:
+Recommended startup:
 
 ```bash
-docker compose -f docker/docker-compose.cpu.yml up --build
-```
-
-GPU mode:
-
-```bash
-docker compose -f docker/docker-compose.gpu.yml up --build
+docker compose up --build
 ```
 
 Then open:
@@ -69,24 +63,17 @@ http://localhost:7860
 
 ## Current Status
 
-Moses is packaged for Docker using container files inside the `docker/` directory.
-
-Available runtimes:
+Moses is packaged for Docker using:
 
 | Runtime | File | Purpose |
 |---|---|---|
-| CPU | `docker/Containerfile.cpu` | Runs without GPU acceleration |
-| GPU | `docker/Containerfile.gpu` | Uses PyTorch CUDA runtime for NVIDIA GPU acceleration |
-| CPU Compose | `docker/docker-compose.cpu.yml` | CPU deployment stack |
-| GPU Compose | `docker/docker-compose.gpu.yml` | GPU deployment stack |
+| Default Runtime | `docker-compose.yml` | Simplified GPU-first startup |
+| CPU Runtime | `docker/Containerfile.cpu` | CPU-only runtime |
+| GPU Runtime | `docker/Containerfile.gpu` | CUDA GPU runtime |
+| CPU Compose | `docker/docker-compose.cpu.yml` | Explicit CPU deployment |
+| GPU Compose | `docker/docker-compose.gpu.yml` | Explicit GPU deployment |
 
-The app runs on port:
-
-```text
-7860
-```
-
-Open after launch:
+The app runs on:
 
 ```text
 http://localhost:7860
@@ -116,30 +103,43 @@ For best Gospel stem quality, use the cleanest stereo mix available.
 
 ---
 
-## Docker Installation — CPU Mode
+## Default Docker Installation
 
-Use this if you do not have an NVIDIA GPU or just want the simplest test run.
+The root `docker-compose.yml` now automatically uses the GPU runtime:
 
-### Requirements
+```text
+docker/Containerfile.gpu
+```
 
-- Docker
-- Docker Compose plugin
+Recommended launch:
 
-### Run
+```bash
+docker compose up --build
+```
 
-From the repository root:
+Stop:
+
+```bash
+docker compose down
+```
+
+---
+
+## CPU-Only Mode
+
+Use this if:
+
+- no NVIDIA GPU exists
+- CUDA is unavailable
+- debugging CPU-only workflows
+
+Run:
 
 ```bash
 docker compose -f docker/docker-compose.cpu.yml up --build
 ```
 
-Then open:
-
-```text
-http://localhost:7860
-```
-
-### Stop
+Stop:
 
 ```bash
 docker compose -f docker/docker-compose.cpu.yml down
@@ -147,38 +147,20 @@ docker compose -f docker/docker-compose.cpu.yml down
 
 ---
 
-## Docker Installation — GPU Mode
+## Explicit GPU Mode
 
-Use this if you have an NVIDIA GPU. This is strongly recommended for large Gospel tracks, choir-heavy songs, and batch processing.
+Use this if you want the dedicated GPU compose file.
 
-### Requirements
-
-- Docker
-- Docker Compose plugin
-- NVIDIA GPU
-- NVIDIA drivers installed on the host
-- NVIDIA Container Toolkit installed on the host
-
-### Verify GPU on Host
+### Verify GPU
 
 ```bash
 nvidia-smi
 ```
 
-If this fails, fix NVIDIA drivers before running Moses in GPU mode.
-
-### Run
-
-From the repository root:
+### Start
 
 ```bash
 docker compose -f docker/docker-compose.gpu.yml up --build
-```
-
-Then open:
-
-```text
-http://localhost:7860
 ```
 
 ### Stop
@@ -191,7 +173,7 @@ docker compose -f docker/docker-compose.gpu.yml down
 
 ## Updating Moses
 
-Pull the latest changes:
+Pull latest updates:
 
 ```bash
 git pull
@@ -200,20 +182,14 @@ git pull
 Then rebuild:
 
 ```bash
-docker compose -f docker/docker-compose.gpu.yml up --build
-```
-
-CPU users can replace the GPU compose file with:
-
-```text
-docker/docker-compose.cpu.yml
+docker compose up --build
 ```
 
 ---
 
 ## Persistent Data
 
-Docker Compose maps these folders from your local repo into the container:
+Docker maps these folders outside the container:
 
 ```text
 exports/
@@ -221,15 +197,23 @@ mixes/
 workspaces/
 cache/
 logs/
+models/
 ```
 
-That means your exports, workspace data, cache, and logs should survive container rebuilds.
+Your:
+
+- exports
+- model cache
+- logs
+- workspaces
+
+should survive rebuilds.
 
 ---
 
 ## Local Python Installation
 
-Use this for development or debugging.
+Use this for development/debugging.
 
 ### Create Virtual Environment
 
@@ -275,19 +259,19 @@ http://localhost:7860
 
 ## Bootstrap Diagnostics
 
-Moses includes a bootstrap system that checks:
+Moses validates:
 
 - Python version
 - FFmpeg
 - FFprobe
 - Demucs
-- PyTorch / CUDA
-- NVIDIA driver visibility
+- CUDA
+- NVIDIA drivers
 - required folders
 - SQLite database
 - Demucs model readiness
 
-Diagnostics are written to:
+Diagnostics output:
 
 ```text
 logs/startup_diagnostics.json
@@ -299,13 +283,13 @@ logs/startup_diagnostics.json
 
 Recommended workflow:
 
-1. Upload a clean WAV/FLAC/ALAC song.
-2. Split the song into stems.
-3. Export using the Ableton-ready packaging flow.
-4. Extract the ZIP.
-5. Drag the WAV files into Ableton Live as separate tracks.
+1. Upload clean WAV/FLAC/ALAC audio.
+2. Split stems.
+3. Export Ableton-ready package.
+4. Extract ZIP.
+5. Drag WAV stems into Ableton Live.
 
-Expected export structure:
+Expected structure:
 
 ```text
 exports/ableton/SongName/
@@ -321,9 +305,9 @@ exports/ableton/SongName/
 
 ---
 
-## Notes for First Release
+## Notes For First Release
 
-The first release should stay focused on:
+V1 should remain focused on:
 
 - upload song
 - split stems
@@ -331,10 +315,12 @@ The first release should stay focused on:
 - package for Ableton
 - validate against Gospel tracks
 
-Advanced workstation features such as timeline playback, distributed workers, and multi-user access should remain secondary until the core workflow is stable.
+Advanced workstation systems should remain secondary until the core workflow is stable.
 
 ---
 
 ## Disclaimer
 
-For personal learning, rehearsal, and ministry preparation only. Do not redistribute copyrighted stems without permission.
+For personal learning, rehearsal, and ministry preparation only.
+
+Do not redistribute copyrighted stems without permission.
