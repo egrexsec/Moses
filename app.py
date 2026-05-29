@@ -237,16 +237,14 @@ with gr.Blocks(title="Moses") as demo:
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### VOCALS")
                             vocals_stem = gr.Audio(
-                                label="Preview + Download",
-                                show_download_button=True,
+                                label="Preview",
                                 interactive=False
                             )
 
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### DRUMS")
                             drums_stem = gr.Audio(
-                                label="Preview + Download",
-                                show_download_button=True,
+                                label="Preview",
                                 interactive=False
                             )
 
@@ -254,16 +252,14 @@ with gr.Blocks(title="Moses") as demo:
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### BASS")
                             bass_stem = gr.Audio(
-                                label="Preview + Download",
-                                show_download_button=True,
+                                label="Preview",
                                 interactive=False
                             )
 
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### MUSIC")
                             other_stem = gr.Audio(
-                                label="Preview + Download",
-                                show_download_button=True,
+                                label="Preview",
                                 interactive=False
                             )
 
