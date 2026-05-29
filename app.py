@@ -187,8 +187,7 @@ with gr.Blocks(title="Moses") as demo:
 
                     audio_input = gr.Audio(
                         label="INPUT TRACK",
-                        type="filepath",
-                        height=180
+                        type="filepath"
                     )
 
                     with gr.Row():
