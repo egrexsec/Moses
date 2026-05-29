@@ -1,4 +1,5 @@
 import subprocess
+import time
 from pathlib import Path
 
 from utils.audio import get_audio_info
@@ -26,6 +27,10 @@ class JobCancelled(Exception):
     pass
 
 
+class GPUSlotUnavailable(Exception):
+    pass
+
+
 def check_cancelled(job_id):
     if process_registry.is_cancelled(job_id):
         raise JobCancelled("Job was cancelled by user")
@@ -39,6 +44,7 @@ def mark_cancelled(job_id):
         message="Cancelled by user",
         error=""
     )
+
     process_registry.unregister(job_id)
     process_registry.clear_cancelled(job_id)
 
@@ -97,6 +103,29 @@ def run_demucs_subprocess(job_id, cmd):
         raise subprocess.CalledProcessError(return_code, cmd)
 
 
+def wait_for_gpu_slot(job_id, required_units):
+    while True:
+        check_cancelled(job_id)
+
+        if gpu_scheduler.acquire(job_id, required_units):
+            return
+
+        scheduler_status = gpu_scheduler.status()
+
+        job_store.update_job(
+            job_id,
+            status="queued",
+            progress=0,
+            message=(
+                f"Waiting for GPU resources "
+                f"({scheduler_status['used_gpu_units']}/"
+                f"{scheduler_status['max_gpu_units']} used)"
+            )
+        )
+
+        time.sleep(2)
+
+
 def run_demucs_job(job_id, device_name="cpu", slow_rate=0.75):
     job = job_store.get_job(job_id)
 
@@ -104,21 +133,33 @@ def run_demucs_job(job_id, device_name="cpu", slow_rate=0.75):
         return
 
     scheduler_acquired = False
+    required_gpu_units = 0
 
     try:
         check_cancelled(job_id)
 
         if device_name == "cuda":
-            if not gpu_scheduler.acquire():
-                job_store.update_job(
-                    job_id,
-                    status="queued",
-                    progress=0,
-                    message="Waiting for GPU slot"
-                )
-                raise RuntimeError("GPU scheduler slot unavailable")
+            required_gpu_units = gpu_scheduler.estimate_units(
+                job.audio_file,
+                job.model
+            )
+
+            wait_for_gpu_slot(job_id, required_gpu_units)
 
             scheduler_acquired = True
+
+            scheduler_status = gpu_scheduler.status()
+
+            job_store.update_job(
+                job_id,
+                status="running",
+                progress=5,
+                message=(
+                    f"GPU Reserved ({required_gpu_units} units) | "
+                    f"GPU Usage: {scheduler_status['used_gpu_units']}/"
+                    f"{scheduler_status['max_gpu_units']}"
+                )
+            )
 
         job_store.update_job(
             job_id,
@@ -185,6 +226,7 @@ def run_demucs_job(job_id, device_name="cpu", slow_rate=0.75):
             filtered_outputs = organized_files
 
         band_mix_files = []
+
         for stem_type in ["bass", "drums", "other"]:
             band_mix_files.extend(categorized.get(stem_type, []))
 
@@ -239,4 +281,4 @@ def run_demucs_job(job_id, device_name="cpu", slow_rate=0.75):
         process_registry.unregister(job_id)
 
         if scheduler_acquired:
-            gpu_scheduler.release()
+            gpu_scheduler.release(job_id)
