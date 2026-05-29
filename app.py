@@ -4,6 +4,8 @@ from pathlib import Path
 
 from utils.audio import check_ffmpeg, get_audio_info
 from utils.system import detect_device
+from utils.export import create_zip_archive
+from utils.music import detect_bpm_and_key
 
 OUTPUT_DIR = "separated"
 
@@ -55,14 +57,43 @@ def collect_output_files(model, song_name):
     return list(result_folder.glob("*.wav"))
 
 
+def build_metadata(audio_file):
+    info = get_audio_info(audio_file)
+    music_info = detect_bpm_and_key(audio_file)
+
+    metadata_lines = []
+
+    if info:
+        metadata_lines.append(
+            f"Duration: {info['duration_minutes']} minutes"
+        )
+
+    if music_info:
+        metadata_lines.append(
+            f"Estimated BPM: {music_info['bpm']}"
+        )
+        metadata_lines.append(
+            f"Estimated Key: {music_info['key']}"
+        )
+
+    metadata_lines.append(
+        f"Processing Device: {device_info['device']}"
+    )
+
+    return "\n".join(metadata_lines)
+
+
 def split_song(audio_file, model, mode):
     if audio_file is None:
-        return "Please upload a song.", [], ""
+        return "Please upload a song.", [], "", None
 
     if not ffmpeg_installed:
-        return "FFmpeg is not installed.", [], "Install FFmpeg and restart Moses."
-
-    info = get_audio_info(audio_file)
+        return (
+            "FFmpeg is not installed.",
+            [],
+            "Install FFmpeg and restart Moses.",
+            None
+        )
 
     cmd = build_demucs_command(model, mode)
     cmd.append(audio_file)
@@ -70,28 +101,37 @@ def split_song(audio_file, model, mode):
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
-        return f"Error: {e}", [], ""
+        return f"Error: {e}", [], "", None
 
     song_name = Path(audio_file).stem
     files = collect_output_files(model, song_name)
 
-    metadata = ""
+    metadata = build_metadata(audio_file)
 
-    if info:
-        metadata = (
-            f"Duration: {info['duration_minutes']} minutes\n"
-            f"Processing Device: {device_info['device']}"
-        )
+    zip_file = create_zip_archive(
+        files,
+        f"{song_name}_stems.zip"
+    )
 
-    return "Stem separation complete.", [str(f) for f in files], metadata
+    return (
+        "Stem separation complete.",
+        [str(f) for f in files],
+        metadata,
+        zip_file
+    )
 
 
 def batch_split(audio_files, model, mode):
     if not audio_files:
-        return "Please upload songs.", [], ""
+        return "Please upload songs.", [], "", None
 
     if not ffmpeg_installed:
-        return "FFmpeg is not installed.", [], "Install FFmpeg and restart Moses."
+        return (
+            "FFmpeg is not installed.",
+            [],
+            "Install FFmpeg and restart Moses.",
+            None
+        )
 
     all_outputs = []
     processed = []
@@ -116,10 +156,16 @@ def batch_split(audio_files, model, mode):
         f"Device: {device_info['device']}"
     )
 
+    zip_file = create_zip_archive(
+        all_outputs,
+        "moses_batch_stems.zip"
+    )
+
     return (
         f"Batch stem separation complete for {len(processed)} songs.",
         all_outputs,
-        summary
+        summary,
+        zip_file
     )
 
 
@@ -170,11 +216,12 @@ with gr.Blocks(title="Moses") as app:
         status = gr.Textbox(label="Status")
         outputs = gr.File(label="Separated Stems", file_count="multiple")
         metadata = gr.Textbox(label="Song Information")
+        zip_download = gr.File(label="Download ZIP")
 
         run_button.click(
             split_song,
             inputs=[audio, model, mode],
-            outputs=[status, outputs, metadata]
+            outputs=[status, outputs, metadata, zip_download]
         )
 
     with gr.Tab("Batch Processing"):
@@ -185,11 +232,17 @@ with gr.Blocks(title="Moses") as app:
         batch_status = gr.Textbox(label="Batch Status")
         batch_outputs = gr.File(label="Batch Outputs", file_count="multiple")
         batch_metadata = gr.Textbox(label="Batch Summary")
+        batch_zip = gr.File(label="Download Batch ZIP")
 
         batch_button.click(
             batch_split,
             inputs=[batch_audio, model, mode],
-            outputs=[batch_status, batch_outputs, batch_metadata]
+            outputs=[
+                batch_status,
+                batch_outputs,
+                batch_metadata,
+                batch_zip
+            ]
         )
 
 app.launch()
