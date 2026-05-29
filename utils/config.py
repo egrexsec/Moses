@@ -9,7 +9,9 @@ DEFAULT_CONFIG = {
     "default_model": "htdemucs",
     "default_mode": "4 Stems",
     "slow_playback_rate": 0.75,
-    "export_directory": "exports"
+    "export_directory": "exports",
+    "worker_pool_size": 2,
+    "max_gpu_jobs": 1
 }
 
 
@@ -19,7 +21,12 @@ def load_config():
         return DEFAULT_CONFIG
 
     with open(CONFIG_PATH, "r") as f:
-        return json.load(f)
+        config = json.load(f)
+
+    merged_config = DEFAULT_CONFIG.copy()
+    merged_config.update(config)
+
+    return merged_config
 
 
 def save_config(config):
