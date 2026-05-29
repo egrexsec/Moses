@@ -43,6 +43,49 @@ def init_db():
             )
             """
         )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                project_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                project_type TEXT,
+                workspace_path TEXT,
+                created_at REAL,
+                updated_at REAL
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_items (
+                item_id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                title TEXT,
+                source_path TEXT,
+                song_order INTEGER,
+                notes TEXT,
+                created_at REAL,
+                FOREIGN KEY(project_id) REFERENCES projects(project_id)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_jobs (
+                project_id TEXT NOT NULL,
+                job_id TEXT NOT NULL,
+                created_at REAL,
+                PRIMARY KEY(project_id, job_id),
+                FOREIGN KEY(project_id) REFERENCES projects(project_id),
+                FOREIGN KEY(job_id) REFERENCES jobs(job_id)
+            )
+            """
+        )
+
         conn.commit()
         conn.close()
 
