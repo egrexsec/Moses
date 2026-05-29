@@ -35,6 +35,65 @@ MODEL_DESCRIPTIONS = {
     ),
 }
 
+X32_THEME_CSS = """
+body {
+    background: #0b0f14 !important;
+}
+
+.gradio-container {
+    background: linear-gradient(to bottom, #11161d, #0b0f14) !important;
+    color: #d7dde5 !important;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+h1, h2, h3, p, label {
+    color: #d7dde5 !important;
+}
+
+.block {
+    background: #161c24 !important;
+    border: 1px solid #2a323d !important;
+    border-radius: 10px !important;
+    box-shadow: 0 0 12px rgba(0,0,0,0.35) !important;
+}
+
+button.primary {
+    background: linear-gradient(to bottom, #00b3ff, #0077b6) !important;
+    border: none !important;
+    color: white !important;
+    font-weight: bold !important;
+    border-radius: 8px !important;
+}
+
+button.primary:hover {
+    background: linear-gradient(to bottom, #27c1ff, #0096e6) !important;
+}
+
+textarea,
+input,
+select {
+    background: #0f141a !important;
+    color: #d7dde5 !important;
+    border: 1px solid #2d3742 !important;
+}
+
+.tab-nav button {
+    background: #151b22 !important;
+    color: #d7dde5 !important;
+    border: 1px solid #2a323d !important;
+}
+
+.tab-nav button.selected {
+    background: #00a8ff !important;
+    color: white !important;
+}
+
+.progress-text {
+    color: #00d084 !important;
+    font-weight: bold !important;
+}
+"""
+
 
 def empty_job_outputs(message="No active job."):
     return (
@@ -169,22 +228,24 @@ def update_model_description(model_key):
     return MODEL_DESCRIPTIONS.get(model_key, "")
 
 
-with gr.Blocks(title="Moses") as demo:
+with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
     gr.Markdown("# Moses")
-    gr.Markdown("Gospel Stem Separation")
+    gr.Markdown("### Gospel Stem Separation Console")
 
     with gr.Tab("Split Song"):
         with gr.Row():
             with gr.Column(scale=2):
+                gr.Markdown("## Input Routing")
+
                 audio_input = gr.Audio(
-                    label="Upload Song",
+                    label="Stereo Input Track",
                     type="filepath"
                 )
 
                 model_choice = gr.Dropdown(
                     choices=list(MODEL_OPTIONS.keys()),
                     value="Studio Quality (Recommended)",
-                    label="Separation Quality"
+                    label="Separation Engine"
                 )
 
                 model_description = gr.Markdown(
@@ -200,37 +261,39 @@ with gr.Blocks(title="Moses") as demo:
                 export_preset = gr.Dropdown(
                     choices=list(EXPORT_PRESETS.keys()),
                     value=list(EXPORT_PRESETS.keys())[0],
-                    label="Export Preset"
+                    label="Output Routing Preset"
                 )
 
                 split_button = gr.Button(
-                    "Split Song",
+                    "Process Stem Split",
                     variant="primary"
                 )
 
                 job_id_output = gr.Textbox(
-                    label="Job ID",
+                    label="Processing Job ID",
                     interactive=False
                 )
 
             with gr.Column(scale=2):
+                gr.Markdown("## Stem Output Matrix")
+
                 status_output = gr.Textbox(
-                    label="Job Status"
+                    label="Engine Status"
                 )
 
                 progress_output = gr.Slider(
-                    label="Progress",
+                    label="Processing Meter",
                     minimum=0,
                     maximum=100,
                     value=0,
                     interactive=False
                 )
 
-                vocals_output = gr.File(label="Vocals")
-                drums_output = gr.File(label="Drums")
-                bass_output = gr.File(label="Bass")
-                other_output = gr.File(label="Other")
-                zip_output = gr.File(label="Ableton Export ZIP")
+                vocals_output = gr.File(label="Vocals Bus")
+                drums_output = gr.File(label="Drums Bus")
+                bass_output = gr.File(label="Bass Bus")
+                other_output = gr.File(label="Music Bus")
+                zip_output = gr.File(label="Ableton Session Export")
 
         split_button.click(
             submit_job,
@@ -273,7 +336,7 @@ with gr.Blocks(title="Moses") as demo:
         diagnostics_box = gr.Textbox(
             value=diagnostics_text(),
             lines=20,
-            label="Runtime Diagnostics"
+            label="System Diagnostics"
         )
 
 
