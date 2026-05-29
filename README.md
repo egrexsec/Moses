@@ -13,6 +13,60 @@ Upload Song
 
 ---
 
+## Quick Start
+
+### 1. Install Requirements
+
+Install:
+
+- Git
+- Docker Desktop or Docker Engine
+- Docker Compose plugin
+
+GPU users additionally need:
+
+- NVIDIA GPU
+- NVIDIA drivers
+- NVIDIA Container Toolkit
+
+---
+
+### 2. Clone The Repository
+
+```bash
+git clone https://github.com/egrexsec/moses.git
+```
+
+Enter the project directory:
+
+```bash
+cd moses
+```
+
+---
+
+### 3. Start Moses
+
+CPU mode:
+
+```bash
+docker compose -f docker/docker-compose.cpu.yml up --build
+```
+
+GPU mode:
+
+```bash
+docker compose -f docker/docker-compose.gpu.yml up --build
+```
+
+Then open:
+
+```text
+http://localhost:7860
+```
+
+---
+
 ## Current Status
 
 Moses is packaged for Docker using container files inside the `docker/` directory.
@@ -131,6 +185,28 @@ http://localhost:7860
 
 ```bash
 docker compose -f docker/docker-compose.gpu.yml down
+```
+
+---
+
+## Updating Moses
+
+Pull the latest changes:
+
+```bash
+git pull
+```
+
+Then rebuild:
+
+```bash
+docker compose -f docker/docker-compose.gpu.yml up --build
+```
+
+CPU users can replace the GPU compose file with:
+
+```text
+docker/docker-compose.cpu.yml
 ```
 
 ---
