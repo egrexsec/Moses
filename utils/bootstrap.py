@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -7,7 +6,7 @@ from pathlib import Path
 
 from utils.config import DEFAULT_CONFIG, CONFIG_PATH, load_config, save_config
 from utils.database import init_db
-
+from utils.model_manager import ensure_required_models
 
 REQUIRED_DIRECTORIES = [
     "exports",
@@ -21,12 +20,10 @@ REQUIRED_DIRECTORIES = [
     "spectrograms",
 ]
 
-
 REQUIRED_COMMANDS = [
     "ffmpeg",
     "ffprobe",
 ]
-
 
 DEMUX_MODELS = [
     "htdemucs",
@@ -166,6 +163,31 @@ def ensure_database():
         }
 
 
+def ensure_models():
+    try:
+        results = ensure_required_models(DEMUX_MODELS)
+
+        failed = [r for r in results if not r["success"]]
+
+        return {
+            "name": "Demucs Models",
+            "ok": len(failed) == 0,
+            "details": "; ".join(
+                f"{r['model']}: {'READY' if r['success'] else 'FAILED'}"
+                for r in results
+            ),
+            "fix": "Check internet access and verify Demucs installation."
+        }
+
+    except Exception as exc:
+        return {
+            "name": "Demucs Models",
+            "ok": False,
+            "details": str(exc),
+            "fix": "Check model cache permissions and internet access."
+        }
+
+
 def check_nvidia_smi():
     path = shutil.which("nvidia-smi")
 
@@ -212,6 +234,7 @@ def run_bootstrap_checks():
         checks.append(check_command(command))
 
     checks.append(check_demucs())
+    checks.append(ensure_models())
     checks.append(check_torch_cuda())
     checks.append(check_nvidia_smi())
 
@@ -225,6 +248,7 @@ def diagnostics_text():
     for check in checks:
         status = "PASS" if check["ok"] else "WARN"
         lines.append(f"[{status}] {check['name']}: {check['details']}")
+
         if not check["ok"]:
             lines.append(f"  Fix: {check['fix']}")
 
