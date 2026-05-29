@@ -1,20 +1,29 @@
 import json
+import os
 import sqlite3
 from pathlib import Path
 from threading import Lock
 
 
-DB_PATH = Path("moses.db")
+DEFAULT_DB_PATH = "data/moses.db"
+DB_PATH = Path(os.getenv("MOSES_DB_PATH", DEFAULT_DB_PATH))
 _db_lock = Lock()
 
 
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
 def get_connection():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     with _db_lock:
         conn = get_connection()
         conn.execute(
