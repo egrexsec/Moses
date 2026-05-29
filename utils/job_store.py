@@ -4,6 +4,8 @@ import threading
 import time
 import uuid
 
+from utils.database import upsert_job
+
 
 @dataclass
 class StoredJob:
@@ -21,6 +23,7 @@ class StoredJob:
     practice_track: str | None = None
     vocal_preview: str | None = None
     waveform_image: str | None = None
+    spectrogram_image: str | None = None
     band_mix: str | None = None
     metadata: str = ""
     error: str = ""
@@ -47,6 +50,8 @@ class JobStore:
         with self.lock:
             self.jobs[job.job_id] = job
 
+        upsert_job(job)
+
         return job
 
     def get_job(self, job_id):
@@ -65,7 +70,9 @@ class JobStore:
 
             job.updated_at = time.time()
 
-            return job
+        upsert_job(job)
+
+        return job
 
     def summary(self):
         with self.lock:
