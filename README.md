@@ -45,7 +45,40 @@ cd moses
 
 ---
 
-### 3. Start Moses
+### 3. Detect Recommended Runtime
+
+Moses now includes automatic runtime detection.
+
+Run:
+
+```bash
+bash scripts/setup_runtime.sh
+```
+
+This validates:
+
+- Docker
+- NVIDIA GPU visibility
+- Docker GPU runtime support
+- CUDA container access
+
+It also recommends:
+
+- GPU runtime
+OR
+- CPU runtime
+
+based on your system.
+
+Detection logs are written to:
+
+```text
+logs/runtime_gpu_detection.json
+```
+
+---
+
+### 4. Start Moses
 
 Recommended startup:
 
@@ -81,6 +114,44 @@ http://localhost:7860
 
 ---
 
+## Automatic GPU Runtime Detection
+
+Moses now includes:
+
+```text
+utils/runtime_gpu_detect.py
+```
+
+This automatically checks:
+
+- NVIDIA GPU visibility
+- `nvidia-smi`
+- Docker GPU runtime support
+- CUDA container accessibility
+- recommended runtime mode
+
+Run manually:
+
+```bash
+python utils/runtime_gpu_detect.py
+```
+
+Example output:
+
+```text
+Recommended Startup:
+docker compose up --build
+```
+
+or:
+
+```text
+Recommended Startup:
+docker compose -f docker/docker-compose.cpu.yml up --build
+```
+
+---
+
 ## Recommended Upload Files
 
 Best formats:
@@ -105,7 +176,7 @@ For best Gospel stem quality, use the cleanest stereo mix available.
 
 ## Default Docker Installation
 
-The root `docker-compose.yml` now automatically uses the GPU runtime:
+The root `docker-compose.yml` automatically uses the GPU runtime:
 
 ```text
 docker/Containerfile.gpu
@@ -198,6 +269,7 @@ workspaces/
 cache/
 logs/
 models/
+data/
 ```
 
 Your:
@@ -206,6 +278,7 @@ Your:
 - model cache
 - logs
 - workspaces
+- SQLite database
 
 should survive rebuilds.
 
