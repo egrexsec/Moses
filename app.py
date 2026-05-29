@@ -15,8 +15,12 @@ from utils.preview import get_preview_stems
 from utils.queue import job_queue
 from utils.visualization import generate_waveform_image
 from utils.presets import EXPORT_PRESETS, filter_stems_by_preset
+from utils.mixer import mix_stems
+from utils.workers import background_worker
 
 OUTPUT_DIR = "separated"
+MIX_DIR = Path("mixes")
+MIX_DIR.mkdir(exist_ok=True)
 
 config = load_config()
 
@@ -113,6 +117,23 @@ def create_practice_track(song_name, organized_files):
     )
 
 
+def create_band_mix(song_name, categorized):
+    mix_files = []
+
+    for stem_type in ["bass", "drums", "other"]:
+        mix_files.extend(categorized.get(stem_type, []))
+
+    if not mix_files:
+        return None
+
+    output_path = MIX_DIR / f"{song_name}_band_mix.wav"
+
+    return mix_stems(
+        mix_files,
+        str(output_path)
+    )
+
+
 def process_song(audio_file, model, mode):
     job = job_queue.add_job(audio_file, model, mode)
 
@@ -132,7 +153,17 @@ def process_song(audio_file, model, mode):
 
 def split_song(audio_file, model, mode, export_preset):
     if audio_file is None:
-        return "Please upload a song.", [], "", None, None, None, None
+        return (
+            "Please upload a song.",
+            [],
+            "",
+            None,
+            None,
+            None,
+            None,
+            "",
+            None
+        )
 
     if not ffmpeg_installed:
         return (
@@ -142,6 +173,8 @@ def split_song(audio_file, model, mode, export_preset):
             None,
             None,
             None,
+            None,
+            "",
             None
         )
 
@@ -155,7 +188,7 @@ def split_song(audio_file, model, mode, export_preset):
             mode
         )
     except subprocess.CalledProcessError as e:
-        return f"Error: {e}", [], "", None, None, None, None
+        return f"Error: {e}", [], "", None, None, None, None, "", None
 
     tracker.update(1, f"Completed {song_name}")
 
@@ -174,6 +207,11 @@ def split_song(audio_file, model, mode, export_preset):
     practice_track = create_practice_track(
         song_name,
         organized_files
+    )
+
+    band_mix = create_band_mix(
+        song_name,
+        categorized
     )
 
     zip_file = create_zip_archive(
@@ -206,7 +244,8 @@ def split_song(audio_file, model, mode, export_preset):
         practice_track,
         previews.get("vocals"),
         waveform_image,
-        queue_text
+        queue_text,
+        band_mix
     )
 
 
@@ -268,6 +307,7 @@ with gr.Blocks(title="Moses") as app:
         vocal_preview = gr.Audio(label="Vocal Preview")
         waveform_preview = gr.Image(label="Waveform Preview")
         queue_status = gr.Textbox(label="Queue Status")
+        band_mix_preview = gr.Audio(label="Band Mix Preview")
 
         run_button.click(
             split_song,
@@ -280,7 +320,8 @@ with gr.Blocks(title="Moses") as app:
                 practice_track,
                 vocal_preview,
                 waveform_preview,
-                queue_status
+                queue_status,
+                band_mix_preview
             ]
         )
 
