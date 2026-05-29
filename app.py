@@ -71,7 +71,8 @@ def empty_job_outputs(message="No active job."):
         None,
         None,
         None,
-        gr.update(value=0),
+        gr.update(value=0, interactive=False),
+        gr.update(interactive=True, variant="primary"),
         "",
     )
 
@@ -85,10 +86,10 @@ def normalize_outputs(outputs):
 
     if isinstance(outputs, list):
         return {
-            "vocals": outputs[0] if len(outputs) > 0 else None,
-            "drums": outputs[1] if len(outputs) > 1 else None,
-            "bass": outputs[2] if len(outputs) > 2 else None,
-            "other": outputs[3] if len(outputs) > 3 else None,
+            "drums": outputs[0] if len(outputs) > 0 else None,
+            "bass": outputs[1] if len(outputs) > 1 else None,
+            "other": outputs[2] if len(outputs) > 2 else None,
+            "vocals": outputs[3] if len(outputs) > 3 else None,
         }
 
     return {}
@@ -123,20 +124,22 @@ def submit_job(audio_file, model_key, export_preset):
             None,
             None,
             None,
-            gr.update(value=0),
+            gr.update(value=0, interactive=False),
+            gr.update(interactive=True, variant="primary"),
             "",
         )
 
     job = queue_single_job(audio_file, model_key, export_preset)
 
     return (
-        f"QUEUED • {job.song_name}",
+        f"PROCESSING • {job.song_name}",
         None,
         None,
         None,
         None,
         None,
-        gr.update(value=0),
+        gr.update(value=0, interactive=False),
+        gr.update(interactive=False, variant="secondary"),
         job.job_id,
     )
 
@@ -152,6 +155,8 @@ def poll_job(job_id):
 
     outputs = normalize_outputs(job.outputs)
 
+    processing_complete = job.status.lower() in ["complete", "completed", "finished"]
+
     return (
         f"{job.status.upper()} • {job.progress}% • {job.message}",
         outputs.get("vocals"),
@@ -159,8 +164,12 @@ def poll_job(job_id):
         outputs.get("bass"),
         outputs.get("other"),
         job.zip_file,
-        gr.update(value=job.progress),
-        job.job_id,
+        gr.update(value=job.progress, interactive=False),
+        gr.update(
+            interactive=processing_complete,
+            variant="primary" if processing_complete else "secondary"
+        ),
+        job.job_id if not processing_complete else "",
     )
 
 
@@ -282,6 +291,7 @@ with gr.Blocks(title="Moses") as demo:
                     other_stem,
                     zip_output,
                     processing_meter,
+                    split_button,
                     hidden_job_id,
                 ]
             )
@@ -299,6 +309,7 @@ with gr.Blocks(title="Moses") as demo:
                     other_stem,
                     zip_output,
                     processing_meter,
+                    split_button,
                     hidden_job_id,
                 ]
             )
