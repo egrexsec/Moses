@@ -9,6 +9,9 @@ from utils.music import detect_bpm_and_key
 from utils.organization import organize_song_outputs
 from utils.playback import create_slowed_version
 from utils.config import load_config
+from utils.progress import tracker
+from utils.stems import categorize_stems
+from utils.preview import get_preview_stems
 
 OUTPUT_DIR = "separated"
 
@@ -107,9 +110,24 @@ def create_practice_track(song_name, organized_files):
     )
 
 
+def process_song(audio_file, model, mode):
+    song_name = Path(audio_file).stem
+
+    cmd = build_demucs_command(model, mode)
+    cmd.append(audio_file)
+
+    subprocess.run(cmd, check=True)
+
+    files = collect_output_files(model, song_name)
+
+    organized_files = organize_song_outputs(song_name, files)
+
+    return song_name, organized_files
+
+
 def split_song(audio_file, model, mode):
     if audio_file is None:
-        return "Please upload a song.", [], "", None, None
+        return "Please upload a song.", [], "", None, None, None
 
     if not ffmpeg_installed:
         return (
@@ -117,21 +135,23 @@ def split_song(audio_file, model, mode):
             [],
             "Install FFmpeg and restart Moses.",
             None,
+            None,
             None
         )
 
-    cmd = build_demucs_command(model, mode)
-    cmd.append(audio_file)
+    tracker.start(1)
+    tracker.update(0, "Processing single song")
 
     try:
-        subprocess.run(cmd, check=True)
+        song_name, organized_files = process_song(
+            audio_file,
+            model,
+            mode
+        )
     except subprocess.CalledProcessError as e:
-        return f"Error: {e}", [], "", None, None
+        return f"Error: {e}", [], "", None, None, None
 
-    song_name = Path(audio_file).stem
-    files = collect_output_files(model, song_name)
-
-    organized_files = organize_song_outputs(song_name, files)
+    tracker.update(1, f"Completed {song_name}")
 
     metadata = build_metadata(audio_file)
 
@@ -145,12 +165,15 @@ def split_song(audio_file, model, mode):
         f"{song_name}_stems.zip"
     )
 
+    previews = get_preview_stems(organized_files)
+
     return (
-        "Stem separation complete.",
+        tracker.status(),
         organized_files,
         metadata,
         zip_file,
-        practice_track
+        practice_track,
+        previews.get("vocals")
     )
 
 
@@ -169,26 +192,33 @@ def batch_split(audio_files, model, mode):
     all_outputs = []
     processed = []
 
-    for audio_file in audio_files:
-        cmd = build_demucs_command(model, mode)
-        cmd.append(audio_file)
+    tracker.start(len(audio_files))
+
+    for index, audio_file in enumerate(audio_files, start=1):
+        tracker.update(index - 1, f"Processing {Path(audio_file).stem}")
 
         try:
-            subprocess.run(cmd, check=True)
+            song_name, organized_files = process_song(
+                audio_file,
+                model,
+                mode
+            )
         except subprocess.CalledProcessError:
             continue
-
-        song_name = Path(audio_file).stem
-        files = collect_output_files(model, song_name)
-
-        organized_files = organize_song_outputs(song_name, files)
 
         all_outputs.extend(organized_files)
         processed.append(song_name)
 
+        tracker.update(index, f"Completed {song_name}")
+
+    categorized = categorize_stems(all_outputs)
+
     summary = (
         f"Processed {len(processed)} songs\n"
-        f"Device: {device_info['device']}"
+        f"Device: {device_info['device']}\n"
+        f"Vocals: {len(categorized.get('vocals', []))}\n"
+        f"Bass: {len(categorized.get('bass', []))}\n"
+        f"Drums: {len(categorized.get('drums', []))}"
     )
 
     zip_file = create_zip_archive(
@@ -197,7 +227,7 @@ def batch_split(audio_files, model, mode):
     )
 
     return (
-        f"Batch stem separation complete for {len(processed)} songs.",
+        tracker.status(),
         all_outputs,
         summary,
         zip_file
@@ -248,11 +278,12 @@ with gr.Blocks(title="Moses") as app:
 
         run_button = gr.Button("Split Song")
 
-        status = gr.Textbox(label="Status")
+        status = gr.Textbox(label="Progress")
         outputs = gr.File(label="Separated Stems", file_count="multiple")
         metadata = gr.Textbox(label="Song Information")
         zip_download = gr.File(label="Download ZIP")
         practice_track = gr.File(label="Slow Practice Track")
+        vocal_preview = gr.Audio(label="Vocal Preview")
 
         run_button.click(
             split_song,
@@ -262,7 +293,8 @@ with gr.Blocks(title="Moses") as app:
                 outputs,
                 metadata,
                 zip_download,
-                practice_track
+                practice_track,
+                vocal_preview
             ]
         )
 
@@ -271,7 +303,7 @@ with gr.Blocks(title="Moses") as app:
 
         batch_button = gr.Button("Batch Split")
 
-        batch_status = gr.Textbox(label="Batch Status")
+        batch_status = gr.Textbox(label="Batch Progress")
         batch_outputs = gr.File(label="Batch Outputs", file_count="multiple")
         batch_metadata = gr.Textbox(label="Batch Summary")
         batch_zip = gr.File(label="Download Batch ZIP")
