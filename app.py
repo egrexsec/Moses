@@ -189,7 +189,7 @@ def poll_job(job_id):
             interactive=processing_complete,
             variant="primary" if processing_complete else "secondary"
         ),
-        job.job_id if not processing_complete else "",
+        job.job_id,
     )
 
 
