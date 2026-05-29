@@ -1,9 +1,12 @@
-demucs
 gradio
+pandas
+numpy
 torch
 torchaudio
-ffmpeg-python
+demucs
 librosa
 soundfile
-numpy
+pydub
 matplotlib
+scipy
+ffmpeg-python
