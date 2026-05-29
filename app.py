@@ -24,15 +24,9 @@ MODEL_OPTIONS = {
 }
 
 MODEL_DESCRIPTIONS = {
-    "Fast Processing": (
-        "Fastest separation with lower quality."
-    ),
-    "Studio Quality": (
-        "Best quality for Gospel, worship, and rehearsal tracks."
-    ),
-    "Musician Detail": (
-        "Extra instrument detail for learning parts."
-    ),
+    "Fast Processing": "Fastest separation with lower quality.",
+    "Studio Quality": "Best quality for Gospel, worship, and rehearsal tracks.",
+    "Musician Detail": "Extra instrument detail for learning parts.",
 }
 
 X32_THEME_CSS = """
@@ -121,10 +115,6 @@ def empty_job_outputs(message="No active job."):
         None,
         None,
         None,
-        None,
-        None,
-        None,
-        None,
         gr.update(value=0),
     )
 
@@ -176,10 +166,6 @@ def submit_job(audio_file, model_key, export_preset):
             None,
             None,
             None,
-            None,
-            None,
-            None,
-            None,
             gr.update(value=0),
         )
 
@@ -187,10 +173,6 @@ def submit_job(audio_file, model_key, export_preset):
 
     return (
         f"Queued: {job.song_name}",
-        None,
-        None,
-        None,
-        None,
         None,
         None,
         None,
@@ -211,21 +193,12 @@ def poll_job(job_id):
 
     outputs = normalize_outputs(job.outputs)
 
-    vocals_file = outputs.get("vocals")
-    drums_file = outputs.get("drums")
-    bass_file = outputs.get("bass")
-    other_file = outputs.get("other")
-
     return (
         f"{job.status.upper()} • {job.progress}% • {job.message}",
-        vocals_file,
-        drums_file,
-        bass_file,
-        other_file,
-        vocals_file,
-        drums_file,
-        bass_file,
-        other_file,
+        outputs.get("vocals"),
+        outputs.get("drums"),
+        outputs.get("bass"),
+        outputs.get("other"),
         job.zip_file,
         gr.update(value=job.progress),
     )
@@ -304,24 +277,36 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                     with gr.Row():
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### VOCALS")
-                            vocals_preview = gr.Audio(show_download_button=False)
-                            vocals_output = gr.File(label="Download")
+                            vocals_stem = gr.Audio(
+                                label="Preview + Download",
+                                show_download_button=True,
+                                interactive=False
+                            )
 
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### DRUMS")
-                            drums_preview = gr.Audio(show_download_button=False)
-                            drums_output = gr.File(label="Download")
+                            drums_stem = gr.Audio(
+                                label="Preview + Download",
+                                show_download_button=True,
+                                interactive=False
+                            )
 
                     with gr.Row():
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### BASS")
-                            bass_preview = gr.Audio(show_download_button=False)
-                            bass_output = gr.File(label="Download")
+                            bass_stem = gr.Audio(
+                                label="Preview + Download",
+                                show_download_button=True,
+                                interactive=False
+                            )
 
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### MUSIC")
-                            other_preview = gr.Audio(show_download_button=False)
-                            other_output = gr.File(label="Download")
+                            other_stem = gr.Audio(
+                                label="Preview + Download",
+                                show_download_button=True,
+                                interactive=False
+                            )
 
                     zip_output = gr.File(label="ABLETON EXPORT PACKAGE")
 
@@ -336,14 +321,10 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                 ],
                 outputs=[
                     engine_status,
-                    vocals_output,
-                    drums_output,
-                    bass_output,
-                    other_output,
-                    vocals_preview,
-                    drums_preview,
-                    bass_preview,
-                    other_preview,
+                    vocals_stem,
+                    drums_stem,
+                    bass_stem,
+                    other_stem,
                     zip_output,
                     processing_meter,
                 ]
@@ -359,21 +340,17 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                 inputs=[hidden_job_id],
                 outputs=[
                     engine_status,
-                    vocals_output,
-                    drums_output,
-                    bass_output,
-                    other_output,
-                    vocals_preview,
-                    drums_preview,
-                    bass_preview,
-                    other_preview,
+                    vocals_stem,
+                    drums_stem,
+                    bass_stem,
+                    other_stem,
                     zip_output,
                     processing_meter,
                 ]
             )
 
         with gr.Tab("Diagnostics"):
-            diagnostics_box = gr.Textbox(
+            gr.Textbox(
                 value=diagnostics_text(),
                 lines=18,
                 label="SYSTEM DIAGNOSTICS"
