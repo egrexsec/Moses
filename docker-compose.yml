@@ -2,7 +2,9 @@ version: '3.9'
 
 services:
   moses:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Containerfile.gpu
     container_name: moses
     restart: unless-stopped
     ports:
