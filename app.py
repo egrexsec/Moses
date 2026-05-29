@@ -1,32 +1,19 @@
 import gradio as gr
-import subprocess
-from pathlib import Path
 
-from utils.audio import check_ffmpeg, get_audio_info
-from utils.system import detect_device
-from utils.export import create_zip_archive
-from utils.music import detect_bpm_and_key
-from utils.organization import organize_song_outputs
-from utils.playback import create_slowed_version
+from utils.async_processing import run_demucs_job
 from utils.config import load_config
-from utils.progress import tracker
-from utils.stems import categorize_stems
-from utils.preview import get_preview_stems
-from utils.queue import job_queue
-from utils.visualization import generate_waveform_image
-from utils.presets import EXPORT_PRESETS, filter_stems_by_preset
+from utils.job_store import job_store
 from utils.mixer import mix_stems
+from utils.presets import EXPORT_PRESETS
+from utils.system import detect_device
+from utils.audio import check_ffmpeg
+from utils.stems import categorize_stems
 from utils.workers import background_worker
-
-OUTPUT_DIR = "separated"
-MIX_DIR = Path("mixes")
-MIX_DIR.mkdir(exist_ok=True)
 
 config = load_config()
 
 device_info = detect_device()
 ffmpeg_installed = check_ffmpeg()
-
 
 PRESETS = {
     "Bass Practice": {
@@ -49,203 +36,128 @@ def apply_preset(preset_name):
     return preset["model"], preset["mode"]
 
 
-def build_demucs_command(model, mode):
-    cmd = [
-        "python",
-        "-m",
-        "demucs",
-        "-n",
-        model,
-        "--out",
-        OUTPUT_DIR,
-    ]
-
-    if mode == "Vocals + Instrumental":
-        cmd += ["--two-stems", "vocals"]
-
-    return cmd
-
-
-def collect_output_files(model, song_name):
-    result_folder = Path(OUTPUT_DIR) / model / song_name
-    return list(result_folder.glob("*.wav"))
-
-
-def build_metadata(audio_file):
-    info = get_audio_info(audio_file)
-    music_info = detect_bpm_and_key(audio_file)
-
-    metadata_lines = []
-
-    if info:
-        metadata_lines.append(
-            f"Duration: {info['duration_minutes']} minutes"
-        )
-
-    if music_info:
-        metadata_lines.append(
-            f"Estimated BPM: {music_info['bpm']}"
-        )
-        metadata_lines.append(
-            f"Estimated Key: {music_info['key']}"
-        )
-
-    metadata_lines.append(
-        f"Processing Device: {device_info['device']}"
-    )
-
-    return "\n".join(metadata_lines)
-
-
-def create_practice_track(song_name, organized_files):
-    vocals_file = None
-
-    for file in organized_files:
-        if "vocals" in file.lower():
-            vocals_file = file
-            break
-
-    if not vocals_file:
-        return None
-
-    slowed_output = f"exports/{song_name}/{song_name}_slow_practice.wav"
-
-    return create_slowed_version(
-        vocals_file,
-        slowed_output,
-        config["slow_playback_rate"]
-    )
-
-
-def create_band_mix(song_name, categorized):
-    mix_files = []
-
-    for stem_type in ["bass", "drums", "other"]:
-        mix_files.extend(categorized.get(stem_type, []))
-
-    if not mix_files:
-        return None
-
-    output_path = MIX_DIR / f"{song_name}_band_mix.wav"
-
-    return mix_stems(
-        mix_files,
-        str(output_path)
-    )
-
-
-def process_song(audio_file, model, mode):
-    job = job_queue.add_job(audio_file, model, mode)
-
-    cmd = build_demucs_command(model, mode)
-    cmd.append(audio_file)
-
-    subprocess.run(cmd, check=True)
-
-    files = collect_output_files(model, job.song_name)
-
-    organized_files = organize_song_outputs(job.song_name, files)
-
-    job_queue.mark_done(job)
-
-    return job.song_name, organized_files
-
-
-def split_song(audio_file, model, mode, export_preset):
+def submit_job(audio_file, model, mode, export_preset):
     if audio_file is None:
-        return (
-            "Please upload a song.",
-            [],
-            "",
-            None,
-            None,
-            None,
-            None,
-            "",
-            None
-        )
+        return "No file uploaded.", ""
 
     if not ffmpeg_installed:
-        return (
-            "FFmpeg is not installed.",
-            [],
-            "Install FFmpeg and restart Moses.",
-            None,
-            None,
-            None,
-            None,
-            "",
-            None
-        )
+        return "FFmpeg is not installed.", ""
 
-    tracker.start(1)
-    tracker.update(0, "Processing single song")
-
-    try:
-        song_name, organized_files = process_song(
-            audio_file,
-            model,
-            mode
-        )
-    except subprocess.CalledProcessError as e:
-        return f"Error: {e}", [], "", None, None, None, None, "", None
-
-    tracker.update(1, f"Completed {song_name}")
-
-    metadata = build_metadata(audio_file)
-
-    categorized = categorize_stems(organized_files)
-
-    filtered_outputs = filter_stems_by_preset(
-        categorized,
+    job = job_store.create_job(
+        audio_file,
+        model,
+        mode,
         export_preset
     )
 
-    if not filtered_outputs:
-        filtered_outputs = organized_files
-
-    practice_track = create_practice_track(
-        song_name,
-        organized_files
+    background_worker.add_task(
+        run_demucs_job,
+        job.job_id,
+        device_info["device"],
+        config["slow_playback_rate"]
     )
 
-    band_mix = create_band_mix(
-        song_name,
-        categorized
+    return (
+        f"Job submitted: {job.song_name}",
+        job.job_id
     )
 
-    zip_file = create_zip_archive(
-        filtered_outputs,
-        f"{song_name}_stems.zip"
-    )
 
-    previews = get_preview_stems(organized_files)
-
-    waveform_image = None
-
-    if previews.get("vocals"):
-        waveform_image = generate_waveform_image(
-            previews.get("vocals")
+def poll_job(job_id):
+    if not job_id:
+        return (
+            "No active job.",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None
         )
 
-    queue_summary = job_queue.summary()
+    job = job_store.get_job(job_id)
+
+    if not job:
+        return (
+            "Job not found.",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None
+        )
+
+    status_text = (
+        f"Status: {job.status} | "
+        f"Progress: {job.progress}% | "
+        f"Message: {job.message}"
+    )
+
+    queue_summary = job_store.summary()
 
     queue_text = (
         f"Queued: {queue_summary['queued']} | "
+        f"Running: {queue_summary['running']} | "
         f"Complete: {queue_summary['complete']} | "
         f"Failed: {queue_summary['failed']}"
     )
 
     return (
-        tracker.status(),
-        filtered_outputs,
-        metadata,
-        zip_file,
-        practice_track,
-        previews.get("vocals"),
-        waveform_image,
+        status_text,
+        job.outputs,
+        job.metadata,
+        job.zip_file,
+        job.practice_track,
+        job.vocal_preview,
+        job.waveform_image,
+        getattr(job, "spectrogram_image", None),
         queue_text,
-        band_mix
+        job.band_mix
+    )
+
+
+def remix_stems(
+    stem_files,
+    vocals_gain,
+    bass_gain,
+    drums_gain,
+    other_gain,
+    mute_vocals,
+    mute_bass,
+    mute_drums,
+    mute_other
+):
+    if not stem_files:
+        return None
+
+    gains = {
+        "vocals": vocals_gain,
+        "bass": bass_gain,
+        "drums": drums_gain,
+        "other": other_gain,
+    }
+
+    mutes = {
+        "vocals": mute_vocals,
+        "bass": mute_bass,
+        "drums": mute_drums,
+        "other": mute_other,
+    }
+
+    output_path = "mixes/custom_mix.wav"
+
+    return mix_stems(
+        stem_files,
+        output_path,
+        gains=gains,
+        mutes=mutes
     )
 
 
@@ -294,35 +206,82 @@ with gr.Blocks(title="Moses") as app:
         outputs=[model, mode]
     )
 
-    with gr.Tab("Single Song"):
+    with gr.Tab("Stem Separation"):
         audio = gr.Audio(type="filepath", label="Upload Song")
 
-        run_button = gr.Button("Split Song")
+        submit_button = gr.Button("Submit Job")
+        poll_button = gr.Button("Refresh Status")
 
-        status = gr.Textbox(label="Progress")
+        job_status = gr.Textbox(label="Job Status")
+        job_id = gr.Textbox(label="Job ID")
+
         outputs = gr.File(label="Separated Stems", file_count="multiple")
         metadata = gr.Textbox(label="Song Information")
         zip_download = gr.File(label="Download ZIP")
         practice_track = gr.File(label="Slow Practice Track")
         vocal_preview = gr.Audio(label="Vocal Preview")
         waveform_preview = gr.Image(label="Waveform Preview")
+        spectrogram_preview = gr.Image(label="Spectrogram Preview")
         queue_status = gr.Textbox(label="Queue Status")
         band_mix_preview = gr.Audio(label="Band Mix Preview")
 
-        run_button.click(
-            split_song,
+        submit_button.click(
+            submit_job,
             inputs=[audio, model, mode, export_preset],
+            outputs=[job_status, job_id]
+        )
+
+        poll_button.click(
+            poll_job,
+            inputs=[job_id],
             outputs=[
-                status,
+                job_status,
                 outputs,
                 metadata,
                 zip_download,
                 practice_track,
                 vocal_preview,
                 waveform_preview,
+                spectrogram_preview,
                 queue_status,
                 band_mix_preview
             ]
+        )
+
+    with gr.Tab("Mixer"):
+        mixer_files = gr.File(
+            label="Stem Files",
+            file_count="multiple"
+        )
+
+        vocals_gain = gr.Slider(0, 2, value=1, label="Vocals Gain")
+        bass_gain = gr.Slider(0, 2, value=1, label="Bass Gain")
+        drums_gain = gr.Slider(0, 2, value=1, label="Drums Gain")
+        other_gain = gr.Slider(0, 2, value=1, label="Other Gain")
+
+        mute_vocals = gr.Checkbox(label="Mute Vocals")
+        mute_bass = gr.Checkbox(label="Mute Bass")
+        mute_drums = gr.Checkbox(label="Mute Drums")
+        mute_other = gr.Checkbox(label="Mute Other")
+
+        remix_button = gr.Button("Create Custom Mix")
+
+        remix_output = gr.Audio(label="Custom Mix")
+
+        remix_button.click(
+            remix_stems,
+            inputs=[
+                mixer_files,
+                vocals_gain,
+                bass_gain,
+                drums_gain,
+                other_gain,
+                mute_vocals,
+                mute_bass,
+                mute_drums,
+                mute_other
+            ],
+            outputs=[remix_output]
         )
 
 app.launch()
