@@ -49,6 +49,26 @@ def empty_job_outputs(message="No active job."):
     )
 
 
+def normalize_outputs(outputs):
+    if outputs is None:
+        return {}
+
+    if isinstance(outputs, dict):
+        return outputs
+
+    if isinstance(outputs, list):
+        normalized = {
+            "vocals": outputs[0] if len(outputs) > 0 else None,
+            "drums": outputs[1] if len(outputs) > 1 else None,
+            "bass": outputs[2] if len(outputs) > 2 else None,
+            "other": outputs[3] if len(outputs) > 3 else None,
+        }
+
+        return normalized
+
+    return {}
+
+
 def queue_single_job(audio_file, model_key, export_preset):
     actual_model = MODEL_OPTIONS[model_key]
 
@@ -126,7 +146,7 @@ def poll_job(job_id):
         f"Message: {job.message}"
     )
 
-    outputs = job.outputs or {}
+    outputs = normalize_outputs(job.outputs)
 
     vocals_file = outputs.get("vocals")
     drums_file = outputs.get("drums")
