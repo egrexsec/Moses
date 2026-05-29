@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   moses:
     build:
@@ -11,9 +9,11 @@ services:
       - "7860:7860"
     environment:
       - PYTHONUNBUFFERED=1
+      - MOSES_DB_PATH=/app/data/moses.db
     volumes:
       - ../exports:/app/exports
       - ../mixes:/app/mixes
       - ../workspaces:/app/workspaces
       - ../cache:/app/cache
       - ../logs:/app/logs
+      - ../data:/app/data
