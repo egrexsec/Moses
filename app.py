@@ -103,6 +103,10 @@ def empty_job_outputs(message="No active job."):
         None,
         None,
         None,
+        None,
+        None,
+        None,
+        None,
         gr.update(value=0),
         gr.update(value="Idle")
     )
@@ -158,6 +162,9 @@ def submit_job(audio_file, model_key, export_preset):
             None,
             None,
             None,
+            None,
+            None,
+            None,
             gr.update(value=0),
             gr.update(value="Idle")
         )
@@ -166,6 +173,9 @@ def submit_job(audio_file, model_key, export_preset):
         return (
             "FFmpeg is not installed.",
             "",
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -180,6 +190,9 @@ def submit_job(audio_file, model_key, export_preset):
     return (
         f"Job submitted: {job.song_name}",
         job.job_id,
+        None,
+        None,
+        None,
         None,
         None,
         None,
@@ -214,6 +227,10 @@ def poll_job(job_id):
 
     return (
         status_text,
+        vocals_file,
+        drums_file,
+        bass_file,
+        other_file,
         vocals_file,
         drums_file,
         bass_file,
@@ -289,10 +306,18 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                     interactive=False
                 )
 
-                vocals_output = gr.File(label="Vocals Bus")
-                drums_output = gr.File(label="Drums Bus")
-                bass_output = gr.File(label="Bass Bus")
-                other_output = gr.File(label="Music Bus")
+                vocals_output = gr.File(label="Vocals Bus Export")
+                vocals_preview = gr.Audio(label="Vocals Bus Preview")
+
+                drums_output = gr.File(label="Drums Bus Export")
+                drums_preview = gr.Audio(label="Drums Bus Preview")
+
+                bass_output = gr.File(label="Bass Bus Export")
+                bass_preview = gr.Audio(label="Bass Bus Preview")
+
+                other_output = gr.File(label="Music Bus Export")
+                other_preview = gr.Audio(label="Music Bus Preview")
+
                 zip_output = gr.File(label="Ableton Session Export")
 
         split_button.click(
@@ -309,6 +334,10 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                 drums_output,
                 bass_output,
                 other_output,
+                vocals_preview,
+                drums_preview,
+                bass_preview,
+                other_preview,
                 zip_output,
                 progress_output,
                 status_output,
@@ -326,6 +355,10 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                 drums_output,
                 bass_output,
                 other_output,
+                vocals_preview,
+                drums_preview,
+                bass_preview,
+                other_preview,
                 zip_output,
                 progress_output,
                 status_output,
