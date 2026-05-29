@@ -4,9 +4,7 @@ from utils.async_processing import run_demucs_job
 from utils.audio import check_ffmpeg
 from utils.config import load_config
 from utils.job_store import job_store
-from utils.mixer import mix_stems
 from utils.presets import EXPORT_PRESETS
-from utils.process_registry import process_registry
 from utils.system import detect_device
 from utils.workers import background_worker
 from utils.bootstrap import diagnostics_text
@@ -16,11 +14,26 @@ config = load_config()
 device_info = detect_device()
 ffmpeg_installed = check_ffmpeg()
 
-MODEL_CHOICES = [
-    "htdemucs",
-    "htdemucs_ft",
-    "htdemucs_6s",
-]
+MODEL_OPTIONS = {
+    "Fast Processing (Lower Quality)": "htdemucs",
+    "Studio Quality (Recommended)": "htdemucs_ft",
+    "Musician Detail Separation": "htdemucs_6s",
+}
+
+MODEL_DESCRIPTIONS = {
+    "Fast Processing (Lower Quality)": (
+        "Best for quick rehearsals and slower computers. "
+        "Faster processing with lower separation quality."
+    ),
+    "Studio Quality (Recommended)": (
+        "Best overall quality for Gospel, worship, choir, and live music. "
+        "Recommended for Ableton exports and rehearsals."
+    ),
+    "Musician Detail Separation": (
+        "Separates additional musical elements like guitar and piano more aggressively. "
+        "Useful for learning parts, but may create more audio artifacts."
+    ),
+}
 
 
 def empty_job_outputs(message="No active job."):
@@ -36,10 +49,12 @@ def empty_job_outputs(message="No active job."):
     )
 
 
-def queue_single_job(audio_file, model, export_preset):
+def queue_single_job(audio_file, model_key, export_preset):
+    actual_model = MODEL_OPTIONS[model_key]
+
     job = job_store.create_job(
         audio_file,
-        model,
+        actual_model,
         "4 Stems",
         export_preset
     )
@@ -54,7 +69,7 @@ def queue_single_job(audio_file, model, export_preset):
     return job
 
 
-def submit_job(audio_file, model, export_preset):
+def submit_job(audio_file, model_key, export_preset):
     if audio_file is None:
         return (
             "No file uploaded.",
@@ -81,7 +96,7 @@ def submit_job(audio_file, model, export_preset):
             gr.update(value="Error")
         )
 
-    job = queue_single_job(audio_file, model, export_preset)
+    job = queue_single_job(audio_file, model_key, export_preset)
 
     return (
         f"Job submitted: {job.song_name}",
@@ -130,6 +145,10 @@ def poll_job(job_id):
     )
 
 
+def update_model_description(model_key):
+    return MODEL_DESCRIPTIONS.get(model_key, "")
+
+
 with gr.Blocks(title="Moses") as demo:
     gr.Markdown("# Moses")
     gr.Markdown("Gospel Stem Separation")
@@ -143,9 +162,19 @@ with gr.Blocks(title="Moses") as demo:
                 )
 
                 model_choice = gr.Dropdown(
-                    choices=MODEL_CHOICES,
-                    value="htdemucs_ft",
-                    label="Separation Model"
+                    choices=list(MODEL_OPTIONS.keys()),
+                    value="Studio Quality (Recommended)",
+                    label="Separation Quality"
+                )
+
+                model_description = gr.Markdown(
+                    MODEL_DESCRIPTIONS["Studio Quality (Recommended)"]
+                )
+
+                model_choice.change(
+                    update_model_description,
+                    inputs=[model_choice],
+                    outputs=[model_description]
                 )
 
                 export_preset = gr.Dropdown(
