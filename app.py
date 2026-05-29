@@ -43,50 +43,6 @@ body {
     padding-top: 10px !important;
 }
 
-h1, h2, h3, p, label {
-    color: #d8e0ea !important;
-}
-
-.block {
-    background: #141b23 !important;
-    border: 1px solid #273240 !important;
-    border-radius: 8px !important;
-    box-shadow: 0 0 10px rgba(0,0,0,0.25) !important;
-    padding: 8px !important;
-}
-
-button.primary {
-    background: linear-gradient(to bottom, #18bfff, #0086d1) !important;
-    border: none !important;
-    color: white !important;
-    font-weight: 700 !important;
-    border-radius: 6px !important;
-    height: 42px !important;
-}
-
-button.primary:hover {
-    background: linear-gradient(to bottom, #34cbff, #00a2ff) !important;
-}
-
-textarea,
-input,
-select {
-    background: #0e141a !important;
-    color: #d8e0ea !important;
-    border: 1px solid #2b3947 !important;
-}
-
-.tab-nav button {
-    background: #121922 !important;
-    color: #d8e0ea !important;
-    border: 1px solid #273240 !important;
-}
-
-.tab-nav button.selected {
-    background: #00a8ff !important;
-    color: white !important;
-}
-
 .audio-card {
     background: #111821;
     border: 1px solid #273240;
@@ -116,6 +72,7 @@ def empty_job_outputs(message="No active job."):
         None,
         None,
         gr.update(value=0),
+        "",
     )
 
 
@@ -167,18 +124,20 @@ def submit_job(audio_file, model_key, export_preset):
             None,
             None,
             gr.update(value=0),
+            "",
         )
 
     job = queue_single_job(audio_file, model_key, export_preset)
 
     return (
-        f"Queued: {job.song_name}",
+        f"QUEUED • {job.song_name}",
         None,
         None,
         None,
         None,
         None,
         gr.update(value=0),
+        job.job_id,
     )
 
 
@@ -201,6 +160,7 @@ def poll_job(job_id):
         outputs.get("other"),
         job.zip_file,
         gr.update(value=job.progress),
+        job.job_id,
     )
 
 
@@ -208,7 +168,7 @@ def update_model_description(model_key):
     return MODEL_DESCRIPTIONS.get(model_key, "")
 
 
-with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
+with gr.Blocks(title="Moses") as demo:
 
     gr.HTML(
         f"""
@@ -327,10 +287,8 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                     other_stem,
                     zip_output,
                     processing_meter,
+                    hidden_job_id,
                 ]
-            ).then(
-                lambda: "active-job",
-                outputs=[hidden_job_id]
             )
 
             polling_timer = gr.Timer(2)
@@ -346,6 +304,7 @@ with gr.Blocks(title="Moses", css=X32_THEME_CSS) as demo:
                     other_stem,
                     zip_output,
                     processing_meter,
+                    hidden_job_id,
                 ]
             )
 
@@ -362,4 +321,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         show_error=True,
+        css=X32_THEME_CSS,
     )
