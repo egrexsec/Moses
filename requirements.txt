@@ -3,3 +3,6 @@ gradio
 torch
 torchaudio
 ffmpeg-python
+librosa
+soundfile
+numpy
