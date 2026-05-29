@@ -6,9 +6,13 @@ from utils.audio import check_ffmpeg, get_audio_info
 from utils.system import detect_device
 from utils.export import create_zip_archive
 from utils.music import detect_bpm_and_key
+from utils.organization import organize_song_outputs
+from utils.playback import create_slowed_version
+from utils.config import load_config
 
 OUTPUT_DIR = "separated"
 
+config = load_config()
 
 device_info = detect_device()
 ffmpeg_installed = check_ffmpeg()
@@ -24,8 +28,8 @@ PRESETS = {
         "mode": "Vocals + Instrumental"
     },
     "Standard": {
-        "model": "htdemucs",
-        "mode": "4 Stems"
+        "model": config["default_model"],
+        "mode": config["default_mode"]
     }
 }
 
@@ -83,15 +87,36 @@ def build_metadata(audio_file):
     return "\n".join(metadata_lines)
 
 
+def create_practice_track(song_name, organized_files):
+    vocals_file = None
+
+    for file in organized_files:
+        if "vocals" in file.lower():
+            vocals_file = file
+            break
+
+    if not vocals_file:
+        return None
+
+    slowed_output = f"exports/{song_name}/{song_name}_slow_practice.wav"
+
+    return create_slowed_version(
+        vocals_file,
+        slowed_output,
+        config["slow_playback_rate"]
+    )
+
+
 def split_song(audio_file, model, mode):
     if audio_file is None:
-        return "Please upload a song.", [], "", None
+        return "Please upload a song.", [], "", None, None
 
     if not ffmpeg_installed:
         return (
             "FFmpeg is not installed.",
             [],
             "Install FFmpeg and restart Moses.",
+            None,
             None
         )
 
@@ -101,23 +126,31 @@ def split_song(audio_file, model, mode):
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
-        return f"Error: {e}", [], "", None
+        return f"Error: {e}", [], "", None, None
 
     song_name = Path(audio_file).stem
     files = collect_output_files(model, song_name)
 
+    organized_files = organize_song_outputs(song_name, files)
+
     metadata = build_metadata(audio_file)
 
+    practice_track = create_practice_track(
+        song_name,
+        organized_files
+    )
+
     zip_file = create_zip_archive(
-        files,
+        organized_files,
         f"{song_name}_stems.zip"
     )
 
     return (
         "Stem separation complete.",
-        [str(f) for f in files],
+        organized_files,
         metadata,
-        zip_file
+        zip_file,
+        practice_track
     )
 
 
@@ -148,7 +181,9 @@ def batch_split(audio_files, model, mode):
         song_name = Path(audio_file).stem
         files = collect_output_files(model, song_name)
 
-        all_outputs.extend([str(f) for f in files])
+        organized_files = organize_song_outputs(song_name, files)
+
+        all_outputs.extend(organized_files)
         processed.append(song_name)
 
     summary = (
@@ -192,13 +227,13 @@ with gr.Blocks(title="Moses") as app:
 
     model = gr.Dropdown(
         choices=["htdemucs", "htdemucs_ft", "htdemucs_6s"],
-        value="htdemucs",
+        value=config["default_model"],
         label="Model"
     )
 
     mode = gr.Radio(
         choices=["4 Stems", "Vocals + Instrumental"],
-        value="4 Stems",
+        value=config["default_mode"],
         label="Split Mode"
     )
 
@@ -217,11 +252,18 @@ with gr.Blocks(title="Moses") as app:
         outputs = gr.File(label="Separated Stems", file_count="multiple")
         metadata = gr.Textbox(label="Song Information")
         zip_download = gr.File(label="Download ZIP")
+        practice_track = gr.File(label="Slow Practice Track")
 
         run_button.click(
             split_song,
             inputs=[audio, model, mode],
-            outputs=[status, outputs, metadata, zip_download]
+            outputs=[
+                status,
+                outputs,
+                metadata,
+                zip_download,
+                practice_track
+            ]
         )
 
     with gr.Tab("Batch Processing"):
