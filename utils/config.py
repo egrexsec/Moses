@@ -10,8 +10,9 @@ DEFAULT_CONFIG = {
     "default_mode": "4 Stems",
     "slow_playback_rate": 0.75,
     "export_directory": "exports",
-    "worker_pool_size": 2,
-    "max_gpu_jobs": 1
+    "gpu_worker_pool_size": 1,
+    "cpu_worker_pool_size": 2,
+    "max_gpu_units": 4
 }
 
 
