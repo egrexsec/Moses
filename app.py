@@ -7,7 +7,6 @@ from utils.mixer import mix_stems
 from utils.presets import EXPORT_PRESETS
 from utils.system import detect_device
 from utils.audio import check_ffmpeg
-from utils.stems import categorize_stems
 from utils.workers import background_worker
 
 config = load_config()
@@ -31,6 +30,23 @@ PRESETS = {
 }
 
 
+def empty_job_outputs(message="No active job."):
+    return (
+        message,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        gr.update(value=0),
+        gr.update(value="Idle")
+    )
+
+
 def apply_preset(preset_name):
     preset = PRESETS[preset_name]
     return preset["model"], preset["mode"]
@@ -38,10 +54,10 @@ def apply_preset(preset_name):
 
 def submit_job(audio_file, model, mode, export_preset):
     if audio_file is None:
-        return "No file uploaded.", ""
+        return "No file uploaded.", "", gr.update(value=0), gr.update(value="Idle")
 
     if not ffmpeg_installed:
-        return "FFmpeg is not installed.", ""
+        return "FFmpeg is not installed.", "", gr.update(value=0), gr.update(value="Error")
 
     job = job_store.create_job(
         audio_file,
@@ -59,46 +75,29 @@ def submit_job(audio_file, model, mode, export_preset):
 
     return (
         f"Job submitted: {job.song_name}",
-        job.job_id
+        job.job_id,
+        gr.update(value=0),
+        gr.update(value="Queued")
     )
 
 
 def poll_job(job_id):
     if not job_id:
-        return (
-            "No active job.",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None
-        )
+        return empty_job_outputs()
 
     job = job_store.get_job(job_id)
 
     if not job:
-        return (
-            "Job not found.",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None
-        )
+        return empty_job_outputs("Job not found.")
 
     status_text = (
         f"Status: {job.status} | "
         f"Progress: {job.progress}% | "
         f"Message: {job.message}"
     )
+
+    if job.error:
+        status_text += f" | Error: {job.error}"
 
     queue_summary = job_store.summary()
 
@@ -119,7 +118,9 @@ def poll_job(job_id):
         job.waveform_image,
         getattr(job, "spectrogram_image", None),
         queue_text,
-        job.band_mix
+        job.band_mix,
+        gr.update(value=job.progress),
+        gr.update(value=job.status.title())
     )
 
 
@@ -214,6 +215,15 @@ with gr.Blocks(title="Moses") as app:
 
         job_status = gr.Textbox(label="Job Status")
         job_id = gr.Textbox(label="Job ID")
+        progress_bar = gr.Slider(
+            minimum=0,
+            maximum=100,
+            value=0,
+            step=1,
+            label="Progress",
+            interactive=False
+        )
+        live_state = gr.Textbox(label="Live State", value="Idle")
 
         outputs = gr.File(label="Separated Stems", file_count="multiple")
         metadata = gr.Textbox(label="Song Information")
@@ -225,27 +235,39 @@ with gr.Blocks(title="Moses") as app:
         queue_status = gr.Textbox(label="Queue Status")
         band_mix_preview = gr.Audio(label="Band Mix Preview")
 
+        auto_poller = gr.Timer(2.0)
+
         submit_button.click(
             submit_job,
             inputs=[audio, model, mode, export_preset],
-            outputs=[job_status, job_id]
+            outputs=[job_status, job_id, progress_bar, live_state]
         )
+
+        poll_outputs = [
+            job_status,
+            outputs,
+            metadata,
+            zip_download,
+            practice_track,
+            vocal_preview,
+            waveform_preview,
+            spectrogram_preview,
+            queue_status,
+            band_mix_preview,
+            progress_bar,
+            live_state
+        ]
 
         poll_button.click(
             poll_job,
             inputs=[job_id],
-            outputs=[
-                job_status,
-                outputs,
-                metadata,
-                zip_download,
-                practice_track,
-                vocal_preview,
-                waveform_preview,
-                spectrogram_preview,
-                queue_status,
-                band_mix_preview
-            ]
+            outputs=poll_outputs
+        )
+
+        auto_poller.tick(
+            poll_job,
+            inputs=[job_id],
+            outputs=poll_outputs
         )
 
     with gr.Tab("Mixer"):
