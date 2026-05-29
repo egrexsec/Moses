@@ -66,10 +66,10 @@ body {
 def empty_job_outputs(message="No active job."):
     return (
         message,
-        None,
-        None,
-        None,
-        None,
+        gr.update(value=None),
+        gr.update(value=None),
+        gr.update(value=None),
+        gr.update(value=None),
         None,
         gr.update(value=0, interactive=False),
         gr.update(interactive=True, variant="primary"),
@@ -83,9 +83,9 @@ def first_audio_file(value):
         return None
 
     if isinstance(value, list):
-        return value[0] if value else None
+        return str(value[0]) if value else None
 
-    return value
+    return str(value)
 
 
 
@@ -103,10 +103,10 @@ def normalize_outputs(outputs):
 
     if isinstance(outputs, list):
         return {
-            "drums": outputs[0] if len(outputs) > 0 else None,
-            "bass": outputs[1] if len(outputs) > 1 else None,
-            "other": outputs[2] if len(outputs) > 2 else None,
-            "vocals": outputs[3] if len(outputs) > 3 else None,
+            "drums": first_audio_file(outputs[0]) if len(outputs) > 0 else None,
+            "bass": first_audio_file(outputs[1]) if len(outputs) > 1 else None,
+            "other": first_audio_file(outputs[2]) if len(outputs) > 2 else None,
+            "vocals": first_audio_file(outputs[3]) if len(outputs) > 3 else None,
         }
 
     return {}
@@ -138,10 +138,10 @@ def submit_job(audio_file, model_key, export_preset):
     if audio_file is None:
         return (
             "No file uploaded.",
-            None,
-            None,
-            None,
-            None,
+            gr.update(value=None),
+            gr.update(value=None),
+            gr.update(value=None),
+            gr.update(value=None),
             None,
             gr.update(value=0, interactive=False),
             gr.update(interactive=True, variant="primary"),
@@ -152,10 +152,10 @@ def submit_job(audio_file, model_key, export_preset):
 
     return (
         f"PROCESSING • {job.song_name}",
-        None,
-        None,
-        None,
-        None,
+        gr.update(value=None),
+        gr.update(value=None),
+        gr.update(value=None),
+        gr.update(value=None),
         None,
         gr.update(value=0, interactive=False),
         gr.update(interactive=False, variant="secondary"),
@@ -179,10 +179,10 @@ def poll_job(job_id):
 
     return (
         f"{job.status.upper()} • {job.progress}% • {job.message}",
-        outputs.get("vocals"),
-        outputs.get("drums"),
-        outputs.get("bass"),
-        outputs.get("other"),
+        gr.update(value=outputs.get("vocals")),
+        gr.update(value=outputs.get("drums")),
+        gr.update(value=outputs.get("bass")),
+        gr.update(value=outputs.get("other")),
         job.zip_file,
         gr.update(value=job.progress, interactive=False),
         gr.update(
@@ -268,14 +268,16 @@ with gr.Blocks(title="Moses") as demo:
                             gr.Markdown("### VOCALS")
                             vocals_stem = gr.Audio(
                                 label="Preview",
-                                interactive=False
+                                interactive=False,
+                                type="filepath"
                             )
 
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### DRUMS")
                             drums_stem = gr.Audio(
                                 label="Preview",
-                                interactive=False
+                                interactive=False,
+                                type="filepath"
                             )
 
                     with gr.Row():
@@ -283,14 +285,16 @@ with gr.Blocks(title="Moses") as demo:
                             gr.Markdown("### BASS")
                             bass_stem = gr.Audio(
                                 label="Preview",
-                                interactive=False
+                                interactive=False,
+                                type="filepath"
                             )
 
                         with gr.Column(elem_classes=["audio-card"]):
                             gr.Markdown("### MUSIC")
                             other_stem = gr.Audio(
                                 label="Preview",
-                                interactive=False
+                                interactive=False,
+                                type="filepath"
                             )
 
                     zip_output = gr.File(label="ABLETON EXPORT PACKAGE")
