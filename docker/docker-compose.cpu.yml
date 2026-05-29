@@ -1,0 +1,19 @@
+version: '3.9'
+
+services:
+  moses:
+    build:
+      context: ..
+      dockerfile: docker/Containerfile.cpu
+    container_name: moses-cpu
+    restart: unless-stopped
+    ports:
+      - "7860:7860"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../exports:/app/exports
+      - ../mixes:/app/mixes
+      - ../workspaces:/app/workspaces
+      - ../cache:/app/cache
+      - ../logs:/app/logs
