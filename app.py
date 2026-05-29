@@ -77,12 +77,29 @@ def empty_job_outputs(message="No active job."):
     )
 
 
+
+def first_audio_file(value):
+    if value is None:
+        return None
+
+    if isinstance(value, list):
+        return value[0] if value else None
+
+    return value
+
+
+
 def normalize_outputs(outputs):
     if outputs is None:
         return {}
 
     if isinstance(outputs, dict):
-        return outputs
+        return {
+            "vocals": first_audio_file(outputs.get("vocals")),
+            "drums": first_audio_file(outputs.get("drums")),
+            "bass": first_audio_file(outputs.get("bass")),
+            "other": first_audio_file(outputs.get("other")),
+        }
 
     if isinstance(outputs, list):
         return {
@@ -93,6 +110,7 @@ def normalize_outputs(outputs):
         }
 
     return {}
+
 
 
 def queue_single_job(audio_file, model_key, export_preset):
@@ -113,6 +131,7 @@ def queue_single_job(audio_file, model_key, export_preset):
     )
 
     return job
+
 
 
 def submit_job(audio_file, model_key, export_preset):
@@ -144,6 +163,7 @@ def submit_job(audio_file, model_key, export_preset):
     )
 
 
+
 def poll_job(job_id):
     if not job_id:
         return empty_job_outputs()
@@ -171,6 +191,7 @@ def poll_job(job_id):
         ),
         job.job_id if not processing_complete else "",
     )
+
 
 
 def update_model_description(model_key):
