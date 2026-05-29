@@ -5,6 +5,7 @@ from utils.config import load_config
 from utils.job_store import job_store
 from utils.mixer import mix_stems
 from utils.presets import EXPORT_PRESETS
+from utils.process_registry import process_registry
 from utils.system import detect_device
 from utils.audio import check_ffmpeg
 from utils.workers import background_worker
@@ -52,13 +53,7 @@ def apply_preset(preset_name):
     return preset["model"], preset["mode"]
 
 
-def submit_job(audio_file, model, mode, export_preset):
-    if audio_file is None:
-        return "No file uploaded.", "", gr.update(value=0), gr.update(value="Idle")
-
-    if not ffmpeg_installed:
-        return "FFmpeg is not installed.", "", gr.update(value=0), gr.update(value="Error")
-
+def queue_single_job(audio_file, model, mode, export_preset):
     job = job_store.create_job(
         audio_file,
         model,
@@ -73,11 +68,45 @@ def submit_job(audio_file, model, mode, export_preset):
         config["slow_playback_rate"]
     )
 
+    return job
+
+
+def submit_job(audio_file, model, mode, export_preset):
+    if audio_file is None:
+        return "No file uploaded.", "", gr.update(value=0), gr.update(value="Idle")
+
+    if not ffmpeg_installed:
+        return "FFmpeg is not installed.", "", gr.update(value=0), gr.update(value="Error")
+
+    job = queue_single_job(audio_file, model, mode, export_preset)
+
     return (
         f"Job submitted: {job.song_name}",
         job.job_id,
         gr.update(value=0),
         gr.update(value="Queued")
+    )
+
+
+def submit_batch_jobs(audio_files, model, mode, export_preset):
+    if not audio_files:
+        return "No files uploaded for batch queue."
+
+    queued_jobs = []
+
+    for audio_file in audio_files:
+        job = queue_single_job(
+            audio_file,
+            model,
+            mode,
+            export_preset
+        )
+
+        queued_jobs.append(job.song_name)
+
+    return (
+        f"Queued {len(queued_jobs)} jobs: " +
+        ", ".join(queued_jobs[:5])
     )
 
 
@@ -124,6 +153,48 @@ def poll_job(job_id):
     )
 
 
+def cancel_job(job_id):
+    if not job_id:
+        return "No job selected."
+
+    process_registry.request_cancel(job_id)
+
+    job_store.update_job(
+        job_id,
+        status="cancelled",
+        progress=100,
+        message="Cancellation requested"
+    )
+
+    return f"Cancellation requested for job: {job_id}"
+
+
+def retry_job(job_id):
+    job = job_store.get_job(job_id)
+
+    if not job:
+        return "Job not found in memory."
+
+    process_registry.clear_cancelled(job_id)
+
+    background_worker.add_task(
+        run_demucs_job,
+        job.job_id,
+        device_info["device"],
+        config["slow_playback_rate"]
+    )
+
+    job_store.update_job(
+        job_id,
+        status="queued",
+        progress=0,
+        message="Retry requested",
+        error=""
+    )
+
+    return f"Retry queued: {job.song_name}"
+
+
 def remix_stems(
     stem_files,
     vocals_gain,
@@ -160,150 +231,3 @@ def remix_stems(
         gains=gains,
         mutes=mutes
     )
-
-
-with gr.Blocks(title="Moses") as app:
-    gr.Markdown("# Moses")
-    gr.Markdown("AI-powered Gospel stem splitter using Demucs")
-
-    gr.Markdown(
-        f"**Processing Device:** {device_info['device']}"
-    )
-
-    if device_info["gpu"]:
-        gr.Markdown(f"**GPU:** {device_info['gpu']}")
-
-    gr.Markdown(
-        f"**FFmpeg Installed:** {'Yes' if ffmpeg_installed else 'No'}"
-    )
-
-    preset = gr.Dropdown(
-        choices=list(PRESETS.keys()),
-        value="Standard",
-        label="Workflow Preset"
-    )
-
-    export_preset = gr.Dropdown(
-        choices=list(EXPORT_PRESETS.keys()),
-        value="MD Pack",
-        label="Export Preset"
-    )
-
-    model = gr.Dropdown(
-        choices=["htdemucs", "htdemucs_ft", "htdemucs_6s"],
-        value=config["default_model"],
-        label="Model"
-    )
-
-    mode = gr.Radio(
-        choices=["4 Stems", "Vocals + Instrumental"],
-        value=config["default_mode"],
-        label="Split Mode"
-    )
-
-    preset.change(
-        apply_preset,
-        inputs=[preset],
-        outputs=[model, mode]
-    )
-
-    with gr.Tab("Stem Separation"):
-        audio = gr.Audio(type="filepath", label="Upload Song")
-
-        submit_button = gr.Button("Submit Job")
-        poll_button = gr.Button("Refresh Status")
-
-        job_status = gr.Textbox(label="Job Status")
-        job_id = gr.Textbox(label="Job ID")
-        progress_bar = gr.Slider(
-            minimum=0,
-            maximum=100,
-            value=0,
-            step=1,
-            label="Progress",
-            interactive=False
-        )
-        live_state = gr.Textbox(label="Live State", value="Idle")
-
-        outputs = gr.File(label="Separated Stems", file_count="multiple")
-        metadata = gr.Textbox(label="Song Information")
-        zip_download = gr.File(label="Download ZIP")
-        practice_track = gr.File(label="Slow Practice Track")
-        vocal_preview = gr.Audio(label="Vocal Preview")
-        waveform_preview = gr.Image(label="Waveform Preview")
-        spectrogram_preview = gr.Image(label="Spectrogram Preview")
-        queue_status = gr.Textbox(label="Queue Status")
-        band_mix_preview = gr.Audio(label="Band Mix Preview")
-
-        auto_poller = gr.Timer(2.0)
-
-        submit_button.click(
-            submit_job,
-            inputs=[audio, model, mode, export_preset],
-            outputs=[job_status, job_id, progress_bar, live_state]
-        )
-
-        poll_outputs = [
-            job_status,
-            outputs,
-            metadata,
-            zip_download,
-            practice_track,
-            vocal_preview,
-            waveform_preview,
-            spectrogram_preview,
-            queue_status,
-            band_mix_preview,
-            progress_bar,
-            live_state
-        ]
-
-        poll_button.click(
-            poll_job,
-            inputs=[job_id],
-            outputs=poll_outputs
-        )
-
-        auto_poller.tick(
-            poll_job,
-            inputs=[job_id],
-            outputs=poll_outputs
-        )
-
-    with gr.Tab("Mixer"):
-        mixer_files = gr.File(
-            label="Stem Files",
-            file_count="multiple"
-        )
-
-        vocals_gain = gr.Slider(0, 2, value=1, label="Vocals Gain")
-        bass_gain = gr.Slider(0, 2, value=1, label="Bass Gain")
-        drums_gain = gr.Slider(0, 2, value=1, label="Drums Gain")
-        other_gain = gr.Slider(0, 2, value=1, label="Other Gain")
-
-        mute_vocals = gr.Checkbox(label="Mute Vocals")
-        mute_bass = gr.Checkbox(label="Mute Bass")
-        mute_drums = gr.Checkbox(label="Mute Drums")
-        mute_other = gr.Checkbox(label="Mute Other")
-
-        remix_button = gr.Button("Create Custom Mix")
-
-        remix_output = gr.Audio(label="Custom Mix")
-
-        remix_button.click(
-            remix_stems,
-            inputs=[
-                mixer_files,
-                vocals_gain,
-                bass_gain,
-                drums_gain,
-                other_gain,
-                mute_vocals,
-                mute_bass,
-                mute_drums,
-                mute_other
-            ],
-            outputs=[remix_output]
-        )
-
-app.launch()
