@@ -124,3 +124,20 @@ def fetch_recent_jobs(limit=20):
         conn.close()
 
     return [dict(row) for row in rows]
+
+
+def update_job_status(job_id, status, message=""):
+    init_db()
+
+    with _db_lock:
+        conn = get_connection()
+        conn.execute(
+            """
+            UPDATE jobs
+            SET status = ?, message = ?
+            WHERE job_id = ?
+            """,
+            (status, message, job_id)
+        )
+        conn.commit()
+        conn.close()
