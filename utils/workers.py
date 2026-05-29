@@ -1,19 +1,35 @@
 import threading
 from queue import Queue
 
+from utils.config import load_config
 from utils.process_registry import process_registry
 
 
-class BackgroundWorker:
-    def __init__(self):
+config = load_config()
+
+
+class WorkerPool:
+    def __init__(self, worker_count=2):
         self.tasks = Queue()
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.worker_count = worker_count
+        self.workers = []
         self.running = False
 
     def start(self):
-        if not self.running:
-            self.running = True
-            self.thread.start()
+        if self.running:
+            return
+
+        self.running = True
+
+        for index in range(self.worker_count):
+            worker = threading.Thread(
+                target=self.run,
+                daemon=True,
+                name=f"MosesWorker-{index + 1}"
+            )
+
+            worker.start()
+            self.workers.append(worker)
 
     def add_task(self, func, *args, **kwargs):
         self.tasks.put((func, args, kwargs))
@@ -37,6 +53,19 @@ class BackgroundWorker:
     def pending_count(self):
         return self.tasks.qsize()
 
+    def active_worker_count(self):
+        return len(self.workers)
 
-background_worker = BackgroundWorker()
+    def status(self):
+        return {
+            "workers": self.active_worker_count(),
+            "queued_tasks": self.pending_count(),
+            "running": self.running,
+        }
+
+
+background_worker = WorkerPool(
+    worker_count=config.get("worker_pool_size", 2)
+)
+
 background_worker.start()
