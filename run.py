@@ -17,6 +17,7 @@ try:
             server_name="0.0.0.0",
             server_port=7860,
             show_error=True,
+            css=getattr(app, "X32_THEME_CSS", None),
         )
 
     else:
