@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import gradio as gr
 
 from utils.async_processing import run_demucs_job
@@ -30,35 +32,76 @@ MODEL_DESCRIPTIONS = {
 }
 
 X32_THEME_CSS = """
+:root {
+    --bg: #05070b;
+    --bg-soft: #0b0f17;
+    --card: rgba(14, 20, 32, 0.8);
+    --ink: #eef4ff;
+    --muted: #97a7c2;
+    --line: #1d2940;
+    --accent: #8b5cf6;
+    --accent-2: #2563eb;
+    --accent-3: #22d3ee;
+}
+
 body {
-    background: #090d12 !important;
+    color: var(--ink) !important;
+    background:
+        radial-gradient(900px 500px at 85% -15%, rgba(139, 92, 246, .28), transparent 65%),
+        radial-gradient(700px 420px at 8% 0%, rgba(37, 99, 235, .22), transparent 60%),
+        linear-gradient(180deg, #05070b, #060912 50%, #05070b) !important;
 }
 
 .gradio-container {
-    max-width: 1600px !important;
-    margin: auto !important;
-    background: linear-gradient(to bottom, #10161d, #090d12) !important;
-    color: #d8e0ea !important;
-    font-family: 'Segoe UI', sans-serif;
-    padding-top: 10px !important;
+    max-width: 1280px !important;
+    margin: 0 auto !important;
+    color: var(--ink) !important;
+    background: transparent !important;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    padding: 16px 18px 28px !important;
+}
+
+.block {
+    border: 1px solid var(--line) !important;
+    border-radius: 16px !important;
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025)) !important;
+    box-shadow: 0 18px 60px rgba(0,0,0,.38) !important;
 }
 
 .audio-card {
-    background: #111821;
-    border: 1px solid #273240;
-    border-radius: 8px;
-    padding: 8px;
+    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px;
 }
 
 .status-strip {
-    background: linear-gradient(to right, #0d141c, #121d28);
-    border: 1px solid #273240;
-    border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #65d7ff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(7, 10, 16, 0.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(0,0,0,.34);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: #dbe8ff;
+}
+
+button.primary {
+    border: none !important;
+    color: #f1f7ff !important;
+    background: linear-gradient(120deg, var(--accent), var(--accent-2)) !important;
+}
+
+button.secondary {
+    border: 1px solid #314565 !important;
+    background: rgba(22, 30, 44, .75) !important;
+    color: #d7e5ff !important;
+}
+
+footer {
+    display: none !important;
 }
 """
 
@@ -81,6 +124,10 @@ def empty_job_outputs(message="No active job."):
 def first_audio_file(value):
     if value is None:
         return None
+
+    if isinstance(value, dict):
+        candidate = value.get("path") or value.get("name")
+        return str(candidate) if candidate else None
 
     if isinstance(value, list):
         return str(value[0]) if value else None
@@ -113,6 +160,20 @@ def normalize_outputs(outputs):
 
 
 
+def normalize_audio_input(audio_input):
+    if audio_input is None:
+        return None
+
+    if isinstance(audio_input, dict):
+        candidate = audio_input.get("path") or audio_input.get("name")
+        return str(candidate) if candidate else None
+
+    if isinstance(audio_input, (list, tuple)):
+        return str(audio_input[0]) if audio_input else None
+
+    return str(audio_input)
+
+
 def queue_single_job(audio_file, model_key, export_preset):
     actual_model = MODEL_OPTIONS[model_key]
 
@@ -135,9 +196,11 @@ def queue_single_job(audio_file, model_key, export_preset):
 
 
 def submit_job(audio_file, model_key, export_preset):
-    if audio_file is None:
+    normalized_audio = normalize_audio_input(audio_file)
+
+    if not normalized_audio or not Path(normalized_audio).exists():
         return (
-            "No file uploaded.",
+            "No valid file uploaded.",
             gr.update(value=None),
             gr.update(value=None),
             gr.update(value=None),
@@ -148,7 +211,7 @@ def submit_job(audio_file, model_key, export_preset):
             "",
         )
 
-    job = queue_single_job(audio_file, model_key, export_preset)
+    job = queue_single_job(normalized_audio, model_key, export_preset)
 
     return (
         f"PROCESSING • {job.song_name}",
