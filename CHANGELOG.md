@@ -4,6 +4,7 @@
 
 - Marked Moses as archived / no longer actively maintained.
 - Preserved project as a personal learning and portfolio reference.
+- Documented that the original worship practice workflow has been replaced by worship backing tracks.
 
 ## 2026-07-07
 
