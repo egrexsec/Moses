@@ -1,399 +1,148 @@
 # Moses
 
-AI-powered local stem splitter for Gospel music using Demucs.
+Local AI-powered stem separation workflow for rehearsal, ministry preparation, and Ableton-ready exports.
 
-Moses is designed for a simple first-release workflow:
+## Status note
 
-```text
-Upload Song
-→ Split Vocals / Instruments / Stems
-→ Export Ableton-ready WAV files
-→ Import into Ableton Live
-```
+**Recommended status: maintenance mode.**
 
----
+The repository has a real local workflow and multiple utility modules, but it is currently best treated as a specialized personal tool rather than an actively expanding platform. The core value is clear: upload a track, run Demucs locally, export usable stems, and move those stems into rehearsal or production work.
 
-## Quick Start
+## Project summary
 
-### 1. Install Requirements
+Moses is a Gradio-based local application for splitting songs into stems with Demucs, organizing outputs, and packaging files for Ableton-oriented use. The codebase includes Docker paths for CPU and GPU usage plus utility modules for runtime checks, job tracking, exports, and playback helpers.
 
-Install:
+## Who it is for
 
-- Git
-- Docker Desktop or Docker Engine
-- Docker Compose plugin
+- musicians preparing practice tracks
+- church/ministry teams building rehearsal assets
+- producers who want quick local stem separation
+- users who want Ableton-friendly exports without a cloud dependency
 
-GPU users additionally need:
+## Problem it solves
 
-- NVIDIA GPU
-- NVIDIA drivers
-- NVIDIA Container Toolkit
+When you need stems for rehearsal or arrangement work, many tools are cloud-first, subscription-based, or awkward to move into a DAW workflow. Moses focuses on a local path: separate, review, export, and bring the results into Ableton.
 
----
+## Current status
 
-### 2. Clone The Repository
+What is confirmed in the repository today:
+- a Gradio UI (`app.py`)
+- background job handling for Demucs processing
+- CPU/GPU runtime detection helpers
+- Docker files for CPU and GPU paths
+- Ableton export packaging under `utils/ableton_export.py`
+- multiple support utilities for playback, queueing, diagnostics, and workspace behavior
 
-```bash
-git clone https://github.com/egrexsec/moses.git
-```
+What is **not** confirmed in this documentation refresh:
+- a freshly re-validated end-to-end runtime on this machine
+- current screenshots captured from a successful local run
+- automated tests
 
-Enter the project directory:
+## Features
 
-```bash
-cd moses
-```
+- local Demucs-based stem separation workflow
+- Gradio UI for upload, queueing, and result review
+- CPU/GPU runtime detection helpers
+- Docker-first startup path
+- Ableton-ready export packaging with stem normalization and metadata output
+- local-only workflow suitable for rehearsal preparation
 
----
+## Screenshots / demo
 
-### 3. Detect Recommended Runtime
+Screenshots are intentionally omitted for now. The repository was inspected and its Docker/runtime paths were reviewed, but the full end-to-end UI workflow was not re-validated during this docs pass.
 
-Moses now includes automatic runtime detection.
+## Tech stack
 
-Run:
+- Python
+- Gradio
+- Demucs
+- Docker / Docker Compose
+- FFmpeg
 
-```bash
-bash scripts/setup_runtime.sh
-```
+## Quick start
 
-This validates:
-
-- Docker
-- NVIDIA GPU visibility
-- Docker GPU runtime support
-- CUDA container access
-
-It also recommends:
-
-- GPU runtime
-OR
-- CPU runtime
-
-based on your system.
-
-Detection logs are written to:
-
-```text
-logs/runtime_gpu_detection.json
-```
-
----
-
-### 4. Start Moses
-
-Recommended startup:
+### Default Docker path
 
 ```bash
 docker compose up --build
 ```
 
-Then open:
+Open `http://localhost:7860`.
 
-```text
-http://localhost:7860
-```
-
----
-
-## Current Status
-
-Moses is packaged for Docker using:
-
-| Runtime | File | Purpose |
-|---|---|---|
-| Default Runtime | `docker-compose.yml` | Simplified GPU-first startup |
-| CPU Runtime | `docker/Containerfile.cpu` | CPU-only runtime |
-| GPU Runtime | `docker/Containerfile.gpu` | CUDA GPU runtime |
-| CPU Compose | `docker/docker-compose.cpu.yml` | Explicit CPU deployment |
-| GPU Compose | `docker/docker-compose.gpu.yml` | Explicit GPU deployment |
-
-The app runs on:
-
-```text
-http://localhost:7860
-```
-
----
-
-## Automatic GPU Runtime Detection
-
-Moses now includes:
-
-```text
-utils/runtime_gpu_detect.py
-```
-
-This automatically checks:
-
-- NVIDIA GPU visibility
-- `nvidia-smi`
-- Docker GPU runtime support
-- CUDA container accessibility
-- recommended runtime mode
-
-Run manually:
-
-```bash
-python utils/runtime_gpu_detect.py
-```
-
-Example output:
-
-```text
-Recommended Startup:
-docker compose up --build
-```
-
-or:
-
-```text
-Recommended Startup:
-docker compose -f docker/docker-compose.cpu.yml up --build
-```
-
----
-
-## Recommended Upload Files
-
-Best formats:
-
-- WAV, preferably 24-bit
-- FLAC
-- ALAC
-
-Acceptable:
-
-- High bitrate MP3, preferably 320 kbps
-
-Avoid:
-
-- Low bitrate MP3
-- YouTube-ripped audio
-- clipped/distorted recordings
-
-For best Gospel stem quality, use the cleanest stereo mix available.
-
----
-
-## Default Docker Installation
-
-The root `docker-compose.yml` automatically uses the GPU runtime:
-
-```text
-docker/Containerfile.gpu
-```
-
-Recommended launch:
-
-```bash
-docker compose up --build
-```
-
-Stop:
-
-```bash
-docker compose down
-```
-
----
-
-## CPU-Only Mode
-
-Use this if:
-
-- no NVIDIA GPU exists
-- CUDA is unavailable
-- debugging CPU-only workflows
-
-Run:
+### CPU-specific path
 
 ```bash
 docker compose -f docker/docker-compose.cpu.yml up --build
 ```
 
-Stop:
-
-```bash
-docker compose -f docker/docker-compose.cpu.yml down
-```
-
----
-
-## Explicit GPU Mode
-
-Use this if you want the dedicated GPU compose file.
-
-### Verify GPU
-
-```bash
-nvidia-smi
-```
-
-### Start
+### GPU-specific path
 
 ```bash
 docker compose -f docker/docker-compose.gpu.yml up --build
 ```
 
-### Stop
+## Usage
 
-```bash
-docker compose -f docker/docker-compose.gpu.yml down
-```
+1. start the app locally
+2. upload a song file
+3. choose the model/profile that fits the quality/speed tradeoff
+4. run separation
+5. review the resulting stems
+6. export the Ableton-ready output package
+7. import the stems into Ableton on separate tracks
 
----
+## Ableton workflow
 
-## Updating Moses
+Confirmed from the repo’s export helper:
+- stems are copied into a per-song export structure
+- normalized stem naming is applied
+- metadata is written to `session_info.json`
+- the export can be packaged as a zip for import/handoff
 
-Pull latest updates:
-
-```bash
-git pull
-```
-
-Then rebuild:
-
-```bash
-docker compose up --build
-```
-
----
-
-## Persistent Data
-
-Docker maps these folders outside the container:
+## Project structure
 
 ```text
-exports/
-mixes/
-workspaces/
-cache/
-logs/
-models/
-data/
+app.py                    Main Gradio application
+run.py                    Local launcher
+utils/                    Processing, export, diagnostics, playback, and queue helpers
+docker/                   CPU/GPU container definitions and compose variants
+scripts/                  Runtime/setup helpers
+docker-compose.yml        Default compose entrypoint
 ```
 
-Your:
+## Testing
 
-- exports
-- model cache
-- logs
-- workspaces
-- SQLite database
+There is no automated test suite in the repository today.
 
-should survive rebuilds.
+Practical validation for this repo should include:
+- `docker compose config`
+- Python syntax/compile checks
+- a real sample-track processing test on the target runtime
 
----
+## Deployment
 
-## Local Python Installation
+Moses is intended for **local/self-hosted use**, not public internet deployment.
 
-Use this for development/debugging.
+## Roadmap
 
-### Create Virtual Environment
+See [ROADMAP.md](ROADMAP.md).
 
-Windows:
+## Contributing
 
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Linux/macOS:
+## Security
 
-```bash
-python -m venv venv
-source venv/bin/activate
-```
+See [SECURITY.md](SECURITY.md).
 
-### Install Requirements
+## License
 
-```bash
-pip install -r requirements.txt
-```
-
-### Run Bootstrap Diagnostics
-
-```bash
-python utils/bootstrap.py
-```
-
-### Start Moses
-
-```bash
-python run.py
-```
-
-Open:
-
-```text
-http://localhost:7860
-```
-
----
-
-## Bootstrap Diagnostics
-
-Moses validates:
-
-- Python version
-- FFmpeg
-- FFprobe
-- Demucs
-- CUDA
-- NVIDIA drivers
-- required folders
-- SQLite database
-- Demucs model readiness
-
-Diagnostics output:
-
-```text
-logs/startup_diagnostics.json
-```
-
----
-
-## Ableton Workflow
-
-Recommended workflow:
-
-1. Upload clean WAV/FLAC/ALAC audio.
-2. Split stems.
-3. Export Ableton-ready package.
-4. Extract ZIP.
-5. Drag WAV stems into Ableton Live.
-
-Expected structure:
-
-```text
-exports/ableton/SongName/
-├── Stems/
-│   ├── Vocals.wav
-│   ├── Drums.wav
-│   ├── Bass.wav
-│   ├── Other.wav
-│   └── Instrumental.wav
-└── Metadata/
-    └── session_info.json
-```
-
----
-
-## Notes For First Release
-
-V1 should remain focused on:
-
-- upload song
-- split stems
-- export clean WAV files
-- package for Ableton
-- validate against Gospel tracks
-
-Advanced workstation systems should remain secondary until the core workflow is stable.
-
----
+No `LICENSE` file is currently committed in this repository. Until one is added, the default legal position is **all rights reserved**.
 
 ## Disclaimer
 
-For personal learning, rehearsal, and ministry preparation only.
+Only process audio you have the right to use. Copyright, licensing, and ministry/media distribution rules still apply even when the workflow runs locally.
 
-Do not redistribute copyrighted stems without permission.
+## Recommended alternatives
+
+If you need a more polished or actively maintained stem-separation ecosystem, consider comparing Moses against current Demucs wrappers or other dedicated local stem tools before investing in new feature work here.
